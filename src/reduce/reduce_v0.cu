@@ -1,36 +1,22 @@
-#include <cstdio>
-#include <cuda.h>
-#include <stdlib.h>
-#include <cuda_runtime.h>
-#include <iostream>
+#include <reduce_global.cuh>
 
 // BASELINE
 
-constexpr int THREAD_PER_BLOCK{256};
-
 __global__ void reduce(float* d_input, float* d_output) {
-    int tid = threadIdx.x;
-    int index = blockIdx.x * blockDim.x + tid;
+    int tx = threadIdx.x;
+    int tid = blockIdx.x * blockDim.x + tx;
     for (int i = 1; i < blockDim.x; i <<= 1) {
-        if (tid % (2 * i) == 0) {
-            d_input[index] += d_input[index + i];
+        if (tx % (2 * i) == 0) {
+            d_input[tid] += d_input[tid + i];
         }
         __syncthreads();
     }
-    if (tid == 0) {
-        d_output[blockIdx.x] = d_input[index];
+    if (tx == 0) {
+        d_output[blockIdx.x] = d_input[tid];
     }
-}
-
-bool check(float* output, float* res, int n) {
-    for (int i = 0; i < n; ++i) {
-        if (abs(output[i] - res[i]) > 0.005) return false;
-    }
-    return true;
 }
 
 int main() {
-    constexpr int N = 32 * 1024 * 1024;
     float* input = (float*)malloc(N * sizeof(float));
     float* d_input;
     cudaMalloc((void**)&d_input, N * sizeof(float));
@@ -42,29 +28,20 @@ int main() {
     float* res = (float*)malloc(block_num * sizeof(float));
 
     for (int i = 0; i < N; ++i) input[i] = 2.0 * (float)drand48() - 1.0;
-    // CPU 计算
-    for (int i = 0; i < block_num; ++i) {
-        float cur = 0;
-        for (int j = 0; j < THREAD_PER_BLOCK; ++j) cur += input[i * THREAD_PER_BLOCK + j];
-        res[i] = cur;
-    }
+    
+    reduce_cpu(block_num, THREAD_PER_BLOCK, input, res);
 
     cudaMemcpy(d_input, input, N * sizeof(float), cudaMemcpyHostToDevice);
 
     dim3 Grid(block_num);
     dim3 Block(THREAD_PER_BLOCK);
-
     reduce<<<Grid, Block>>>(d_input, d_output);
+
+    cudaDeviceSynchronize();
     cudaMemcpy(output, d_output, block_num *sizeof(float), cudaMemcpyDeviceToHost);
 
-    if (check(output, res, block_num)) {
-        printf("the ans is right\n");
-    } else {
-        printf("the ans is wrong\n");
-        for (int i = 0; i < block_num; ++i) {
-            std::cout << res[i] << ' ';
-        }
-    }
+    if (check(output, res, block_num)) printf("the ans is right\n");
+    else printf("the ans is wrong\n");
 
     free(input);
     free(output);
