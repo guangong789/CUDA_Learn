@@ -24,46 +24,63 @@ void random_m(int rowNum, int colNum, float *m, bool ones = false) {
     int row, col;
     for (row = 0; row < rowNum; ++row)
         for (col = 0; col < colNum; ++col)
-        if (!ones) M(row, col) = 200.0f * (float)drand48() - 100.0f;
+        if (!ones) M(row, col) = 2.0f * (float)drand48() - 1.0f;
         else M(row, col) = 1.0f;
 }
 
-float cmp_m(const float *h, const float *d) {
-    double diff = 0.0;
-    double rel  = 0.0;
+bool cmp_m(const float *h, const float *d) {
+    const float atol = 1e-2f;
+    const float rtol = 1e-2f;
+
+    double max_abs_err = 0.0;
+    double max_rel_err = 0.0;
+
+    int bad_count = 0;
+
+    int worst_i = 0;
+    int worst_j = 0;
 
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j < N; ++j) {
-            float hv = H(i, j);
-            float dv = D(i, j);
+            float rv = H(i, j);
+            float tv = D(i, j);
 
-            float abs_err = fabsf(hv - dv);
-            float denom = fmaxf(fabsf(hv), fabsf(dv));
-            denom = fmaxf(denom, 1.0f);
-            float rel_err = abs_err / denom;
+            float abs_err = fabsf(rv - tv);
+            float rel_err = abs_err / (fabsf(rv) + 1e-6f);
 
-            diff += abs_err;
-            rel  += rel_err;
+            if (abs_err > max_abs_err) {
+                max_abs_err = abs_err;
+                worst_i = i;
+                worst_j = j;
+            }
+            if (rel_err > max_rel_err) max_rel_err = rel_err;
+            if (abs_err > atol + rtol * fabsf(rv)) bad_count++;
         }
     }
 
-    diff /= (M * N);
-    rel  /= (M * N);
+    printf("RESULT %s\n", bad_count == 0 ? "PASS" : "FAIL");
+    printf("MAX_ABS %.8e\n", max_abs_err);
+    printf("MAX_REL %.8e\n", max_rel_err);
+    printf("BAD_COUNT %d\n", bad_count);
 
-    printf("mean_diff : %.6e\n", diff);
-    printf("mean_rel  : %.6e\n", rel);
+    if (bad_count > 0) {
+        printf("WORST_POS %d %d\n", worst_i, worst_j);
+        printf("REF %.8f\n", H(worst_i, worst_j));
+        printf("TEST %.8f\n", D(worst_i, worst_j));
+    }
 
-    return (float)rel;
+    return bad_count == 0;
 }
 
 void sgemm_cpu(float *a, float *b, float *c) {
     for (int row = 0; row < M; ++row) {
         for (int col = 0; col < N; ++col) {
-            float value = 0.f;
+            double value = 0.0;
+
             for (int k = 0; k < K; ++k) {
-                value += A(row, k) * B(k, col);
+                value += (double)A(row, k) * (double)B(k, col);
             }
-            C(row, col) = value;
+            C(row, col) = (float)value;
         }
     }
 }

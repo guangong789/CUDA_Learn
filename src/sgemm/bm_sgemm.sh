@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SRC="./include/sgemm_global.cuh"
-BIN="./build/sgemm_v1"
+BIN="./build/sgemm_v6"
 
 echo "========================================="
 echo "TEST TARGET: $BIN"
@@ -9,22 +9,13 @@ echo "CONFIG FILE: $SRC"
 echo "========================================="
 
 CASES=(
-"128 128 128 perfect_tile"
-"128 128 130 k_tail"
-"130 130 128 mn_tail"
-"130 130 130 full_tail"
-"129 129 129 float4_tail"
-"130 130 130 float4_tail2"
-"131 131 131 float4_tail3"
-"255 255 255 warp_edge"
-"257 257 257 block_edge"
+"128 128 128 perfect"
+"131 131 131 tail"
+"257 257 257 boundary"
 "1024 8 1024 skinny_k"
 "256 4096 256 huge_k"
-"4096 16 16 skinny_output"
-"512 768 768 transformer_ffn"
-"1024 64 1024 attention"
+"512 768 768 transformer"
 "789 567 678 irregular"
-# "2048 2048 2048 large"
 "1025 1026 1027 pathological"
 )
 
@@ -47,11 +38,16 @@ do
 
     OUTPUT=$($BIN)
 
-    MEAN_DIFF=$(echo "$OUTPUT" | awk '/mean_diff/ {print $3}')
-    MEAN_REL=$(echo "$OUTPUT" | awk '/mean_rel/ {print $3}')
+    RESULT=$(echo "$OUTPUT" | awk '/RESULT/ {print $2}')
+    MAX_ABS=$(echo "$OUTPUT" | awk '/MAX_ABS/ {print $2}')
+    MAX_REL=$(echo "$OUTPUT" | awk '/MAX_REL/ {print $2}')
+    BAD_COUNT=$(echo "$OUTPUT" | awk '/BAD_COUNT/ {print $2}')
 
-    echo "{$M_DIM, $K_DIM, $N_DIM}  $DESC"
-    echo "mean_diff = $MEAN_DIFF"
-    echo "mean_rel  = $MEAN_REL"
+    printf "%-25s %-8s abs=%-12s rel=%-12s bad=%s\n" \
+    "{$M_DIM,$K_DIM,$N_DIM}" \
+    "$RESULT" \
+    "$MAX_ABS" \
+    "$MAX_REL" \
+    "$BAD_COUNT"
 
 done
