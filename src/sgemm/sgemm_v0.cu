@@ -38,8 +38,8 @@ int main() {
 
     sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
-    constexpr unsigned int M_PER_BLOCK{16};
-    constexpr unsigned int N_PER_BLOCK{16};
+    constexpr unsigned int M_PER_BLOCK{32};
+    constexpr unsigned int N_PER_BLOCK{32};
 
     dim3 block{N_PER_BLOCK, M_PER_BLOCK};
     dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
