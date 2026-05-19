@@ -60,6 +60,22 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     }
 }
 
+void launch_v3(float *a, float *b, float *c) {
+    constexpr unsigned int M_PER_BLOCK{32};
+    constexpr unsigned int N_PER_BLOCK{32};  // block 处理的数据
+    constexpr unsigned int K_PER_BLOCK{32};
+    constexpr unsigned int THREAD_CNT_M = M_PER_BLOCK;
+    constexpr unsigned int THREAD_CNT_N = N_PER_BLOCK / LENGTH_FLOAT4;  // 线程数
+
+    dim3 block{THREAD_CNT_N, THREAD_CNT_M};  // therad{8, 32}, 每线程处理 1*4
+    dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK -1) / M_PER_BLOCK};
+    sgemm_gpu<THREAD_CNT_M, THREAD_CNT_N, M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK><<<grid, block>>>(a, b, c);
+
+    cudaDeviceSynchronize();
+}
+
+#ifdef SGEMM_STANDALONE
+
 int main() {
     constexpr size_t mem_size_A = M * K_PAD * sizeof(float);
     constexpr size_t mem_size_B = K * N_PAD * sizeof(float);
@@ -81,22 +97,12 @@ int main() {
     cudaMemcpy(mA_device, mA_host, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(mB_device, mB_host, mem_size_B, cudaMemcpyHostToDevice);
 
-    sgemm_cpu(mA_host, mB_host, mC_host_cpu);
+    // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
    
-    constexpr unsigned int M_PER_BLOCK{32};
-    constexpr unsigned int N_PER_BLOCK{32};  // block 处理的数据
-    constexpr unsigned int K_PER_BLOCK{32};
-    constexpr unsigned int THREAD_CNT_M = M_PER_BLOCK;
-    constexpr unsigned int THREAD_CNT_N = N_PER_BLOCK / LENGTH_FLOAT4;  // 线程数
+    launch_v3(mA_device, mB_device, mC_device);
 
-    dim3 block{THREAD_CNT_N, THREAD_CNT_M};  // therad{8, 32}, 每线程处理 1*4
-    dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK -1) / M_PER_BLOCK};
-    sgemm_gpu<THREAD_CNT_M, THREAD_CNT_N, M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK><<<grid, block>>>(mA_device, mB_device, mC_device);
-
-    cudaDeviceSynchronize();
-    cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
-
-    cmp_m(mC_host_cpu, mC_host_gpu);
+    // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
+    // cmp_m(mC_host_cpu, mC_host_gpu);
 
     cudaFree(mA_device);
     cudaFree(mB_device);
@@ -108,3 +114,5 @@ int main() {
 
     return 0;
 }
+
+#endif

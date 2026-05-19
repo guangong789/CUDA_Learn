@@ -10,9 +10,13 @@
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
 
 // MATRIX
-constexpr int M{1025};
-constexpr int K{1026};
-constexpr int N{1027};
+constexpr int M{4097};
+constexpr int K{4098};
+constexpr int N{4099};
+
+// constexpr int M{1025};
+// constexpr int K{1026};
+// constexpr int N{1027};
 
 constexpr int K_PAD = ((K + 3) / 4) * 4;
 constexpr int N_PAD = ((N + 3) / 4) * 4;
@@ -21,7 +25,7 @@ constexpr int N_PAD = ((N + 3) / 4) * 4;
 #define B(i,j) b[(i)*N_PAD + (j)]
 #define C(i,j) c[(i)*N_PAD + (j)]
 
-void random_m(int rowNum, int colNum, float *m, bool ones = false) {
+inline void random_m(int rowNum, int colNum, float *m, bool ones = false) {
     int row, col;
     for (row = 0; row < rowNum; ++row)
         for (col = 0; col < colNum; ++col)
@@ -29,7 +33,7 @@ void random_m(int rowNum, int colNum, float *m, bool ones = false) {
         else M(row, col) = 1.0f;
 }
 
-bool cmp_m(const float *h, const float *d) {
+inline bool cmp_m(const float *h, const float *d) {
     const float atol = 1e-2f;
     const float rtol = 1e-2f;
 
@@ -73,7 +77,7 @@ bool cmp_m(const float *h, const float *d) {
     return bad_count == 0;
 }
 
-void sgemm_cpu(float *a, float *b, float *c) {
+inline void sgemm_cpu(float *a, float *b, float *c) {
     for (int row = 0; row < M; ++row) {
         for (int col = 0; col < N; ++col) {
             double value = 0.0;
@@ -85,3 +89,12 @@ void sgemm_cpu(float *a, float *b, float *c) {
         }
     }
 }
+
+void launch_v0(float *a, float *b, float *c);
+void launch_v1(float *a, float *b, float *c);
+void launch_v2(float *a, float *b, float *c);
+void launch_v3(float *a, float *b, float *c);
+void launch_v4(float *a, float *b, float *c);
+void launch_v5(float *a, float *b, float *c);
+void launch_v6(float *a, float *b, float *c);
+void launch_cublas_sgemm(float *a, float *b, float *c);

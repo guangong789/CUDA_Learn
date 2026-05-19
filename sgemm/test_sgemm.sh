@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SRC="./include/sgemm_global.cuh"
+SRC="./sgemm/sgemm_global.cuh"
 BIN="./build/sgemm_v6"
 
 echo "========================================="

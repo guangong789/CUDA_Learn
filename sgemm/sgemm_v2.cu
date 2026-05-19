@@ -53,6 +53,22 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     }
 }
 
+void launch_v2(float *a, float *b, float *c) {
+    constexpr unsigned int STRIDE{2};  // 每线程处理的数据 2*2
+    constexpr unsigned int THREAD_CNT_M{16};
+    constexpr unsigned int THREAD_CNT_N{16};  // 线程数
+    constexpr unsigned int M_PER_BLOCK = STRIDE * THREAD_CNT_M;
+    constexpr unsigned int N_PER_BLOCK = STRIDE * THREAD_CNT_N;  // block 处理的数据
+
+    dim3 block{THREAD_CNT_N, THREAD_CNT_M};
+    dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK -1) / M_PER_BLOCK};  // 减少块的数量，增加每个线程的工作量
+    sgemm_gpu<THREAD_CNT_N, STRIDE, N_PER_BLOCK><<<grid, block>>>(a, b, c);
+
+    cudaDeviceSynchronize();
+}
+
+#ifdef SGEMM_STANDALONE
+
 int main() {
     constexpr size_t mem_size_A = M * K_PAD * sizeof(float);
     constexpr size_t mem_size_B = K * N_PAD * sizeof(float);
@@ -74,24 +90,12 @@ int main() {
     cudaMemcpy(mA_device, mA_host, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(mB_device, mB_host, mem_size_B, cudaMemcpyHostToDevice);
 
-    sgemm_cpu(mA_host, mB_host, mC_host_cpu);
+    // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
-    constexpr unsigned int STRIDE{2};  // 每线程处理的数据 2*2
-    constexpr unsigned int THREAD_CNT_M{16};
-    constexpr unsigned int THREAD_CNT_N{16};  // 线程数
-    constexpr unsigned int M_PER_BLOCK = STRIDE * THREAD_CNT_M;
-    constexpr unsigned int N_PER_BLOCK = STRIDE * THREAD_CNT_N;  // block 处理的数据
+    launch_v2(mA_device, mB_device, mC_device);
 
-    dim3 block{THREAD_CNT_N, THREAD_CNT_M};
-    dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK -1) / M_PER_BLOCK};  // 减少块的数量，增加每个线程的工作量
-    sgemm_gpu<THREAD_CNT_N, STRIDE, N_PER_BLOCK><<<grid, block>>>(mA_device, mB_device, mC_device);
-
-    cudaDeviceSynchronize();
-    cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
-
-    float err = cmp_m(mC_host_cpu, mC_host_gpu);
-    if (err > 1e-3f) printf("FAILED\n");
-    else printf("PASSED\n");
+    // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
+    // cmp_m(mC_host_cpu, mC_host_gpu);
 
     cudaFree(mA_device);
     cudaFree(mB_device);
@@ -103,3 +107,5 @@ int main() {
 
     return 0;
 }
+
+#endif

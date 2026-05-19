@@ -78,6 +78,25 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     }
 }
 
+void launch_v5(float *a, float *b, float *c) {
+    constexpr unsigned int M_PER_BLOCK{32};
+    constexpr unsigned int N_PER_BLOCK{32};
+    constexpr unsigned int K_PER_BLOCK{32};
+    constexpr unsigned int M_PER_THREAD{4};
+    constexpr unsigned int N_PER_THREAD{4};
+
+    constexpr unsigned int M_THREAD_PER_BLOCK = M_PER_BLOCK / M_PER_THREAD;
+    constexpr unsigned int N_THREAD_PER_BLOCK = N_PER_BLOCK / N_PER_THREAD;  // 8
+
+    dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK};  // float4 加载，每线程计算 4*4
+    dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
+    sgemm_gpu<M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK, M_PER_THREAD, N_PER_THREAD><<<grid, block>>>(a, b, c);
+
+    cudaDeviceSynchronize();
+}
+
+#ifdef SGEMM_STANDALONE
+
 int main() {
     constexpr size_t mem_size_A = M * K_PAD * sizeof(float);
     constexpr size_t mem_size_B = K * N_PAD * sizeof(float);
@@ -99,26 +118,12 @@ int main() {
     cudaMemcpy(mA_device, mA_host, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(mB_device, mB_host, mem_size_B, cudaMemcpyHostToDevice);
 
-    sgemm_cpu(mA_host, mB_host, mC_host_cpu);
+    // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
-    // 处理数据大小
-    constexpr unsigned int M_PER_BLOCK{32};
-    constexpr unsigned int N_PER_BLOCK{32};
-    constexpr unsigned int K_PER_BLOCK{32};
-    constexpr unsigned int M_PER_THREAD{4};
-    constexpr unsigned int N_PER_THREAD{4};
+    launch_v5(mA_device, mB_device, mC_device);
 
-    constexpr unsigned int M_THREAD_PER_BLOCK = M_PER_BLOCK / M_PER_THREAD;
-    constexpr unsigned int N_THREAD_PER_BLOCK = N_PER_BLOCK / N_PER_THREAD;  // 8
-
-    dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK};  // float4 加载，每线程计算 4*4
-    dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
-    sgemm_gpu<M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK, M_PER_THREAD, N_PER_THREAD><<<grid, block>>>(mA_device, mB_device, mC_device);
-
-    cudaDeviceSynchronize();
-    cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
-
-    cmp_m(mC_host_cpu, mC_host_gpu);
+    // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
+    // cmp_m(mC_host_cpu, mC_host_gpu);
 
     cudaFree(mA_device);
     cudaFree(mB_device);
@@ -130,3 +135,5 @@ int main() {
 
     return 0;
 }
+
+#endif

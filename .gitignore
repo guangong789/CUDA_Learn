@@ -13,9 +13,7 @@ NsightDocs/
 *.nsys-rep
 *.nsight
 
-ncu_learn/
-
-py/
+src/
 
 CMakeUserPresets.json
 compile_commands.json
