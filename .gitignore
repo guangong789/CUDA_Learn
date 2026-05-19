@@ -13,6 +13,8 @@ NsightDocs/
 *.nsys-rep
 *.nsight
 
+include/stbHelper
+
 src/
 
 CMakeUserPresets.json
