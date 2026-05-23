@@ -2,8 +2,6 @@
 
 // REGISTER TILING: DOUBLE BUFFER
 
-#include <sgemm_global.cuh>
-
 template<unsigned int M_PER_BLOCK, unsigned int N_PER_BLOCK, unsigned int K_PER_BLOCK, unsigned int M_PER_THREAD, unsigned int N_PER_THREAD>
 __global__ void sgemm_gpu(float *a, float *b, float *c) {
     constexpr unsigned int TILE_CNT = (K + K_PER_BLOCK - 1) / K_PER_BLOCK;
@@ -172,7 +170,7 @@ int main() {
     launch_v6(mA_device, mB_device, mC_device);
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
-    // cmp_m(mC_host_cpu, mC_host_gpu);
+    // sgemm_cmp(mC_host_cpu, mC_host_gpu);
 
     cudaFree(mA_device);
     cudaFree(mB_device);

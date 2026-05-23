@@ -102,7 +102,7 @@ int main() {
     launch_v3(mA_device, mB_device, mC_device);
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
-    // cmp_m(mC_host_cpu, mC_host_gpu);
+    // sgemm_cmp(mC_host_cpu, mC_host_gpu);
 
     cudaFree(mA_device);
     cudaFree(mB_device);

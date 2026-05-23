@@ -26,14 +26,15 @@ constexpr int N_PAD = ((N + 3) / 4) * 4;
 #define C(i,j) c[(i)*N_PAD + (j)]
 
 inline void random_m(int rowNum, int colNum, float *m, bool ones = false) {
-    int row, col;
-    for (row = 0; row < rowNum; ++row)
-        for (col = 0; col < colNum; ++col)
-        if (!ones) M(row, col) = 2.0f * (float)drand48() - 1.0f;
-        else M(row, col) = 1.0f;
+    for (int row = 0; row < rowNum; ++row) {
+        for (int col = 0; col < colNum; ++col) {
+            if (!ones) M(row, col) = 2.0f * (float)drand48() - 1.0f;
+            else M(row, col) = 1.0f;
+        }
+    }
 }
 
-inline bool cmp_m(const float *h, const float *d) {
+inline bool sgemm_cmp(const float *h, const float *d) {
     const float atol = 1e-2f;
     const float rtol = 1e-2f;
 

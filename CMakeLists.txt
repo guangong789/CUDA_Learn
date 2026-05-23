@@ -12,5 +12,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 add_subdirectory(sgemm)
 add_subdirectory(reduce)
+add_subdirectory(softmax)
 add_subdirectory(src/main)
 add_subdirectory(src/ncu_learn)
