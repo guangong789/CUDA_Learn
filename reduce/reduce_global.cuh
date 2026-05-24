@@ -1,24 +1,43 @@
 #pragma once
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cuda.h>
-#include <stdlib.h>
 #include <cuda_runtime.h>
 #include <iostream>
 
-constexpr int N = 32 * 1024 * 1024;
-constexpr int THREAD_PER_BLOCK{256};
+constexpr int N = 33554431;
+constexpr int THREAD_PER_BLOCK = 256;
 
-inline void reduce_cpu(int block_num, int n_per_block, float * input, float *res) {
-    for (int i = 0; i < block_num; ++i) {
-        float cur = 0;
-        for (int j = 0; j < n_per_block; ++j) cur += input[i * n_per_block + j];
+constexpr int ALIGNMENT = 1024 * THREAD_PER_BLOCK;
+constexpr int N_PADDED = ((N + ALIGNMENT - 1) / ALIGNMENT) * ALIGNMENT;
+
+inline void reduce_cpu(int tpb, const float* input, float* res) {
+    const int BLOCK_NUM = N / tpb; 
+    for (int i = 0; i < BLOCK_NUM; ++i) {
+        float cur = 0.0f;
+        for (int j = 0; j < tpb; ++j) {
+            cur += input[i * tpb + j];
+        }
         res[i] = cur;
     }
 }
 
-inline bool check(float* output, float* res, int n) {
+inline bool check(const float* output, const float* res, int n) {
     for (int i = 0; i < n; ++i) {
-        if (abs(output[i] - res[i]) > 0.005) return false;
+        if (std::abs(output[i] - res[i]) > 0.005f) {
+            return false;
+        }
     }
     return true;
 }
+
+void launch_reduce_v0(float* d_input, float* d_output, int tpb);
+void launch_reduce_v1(float* d_input, float* d_output, int tpb);
+void launch_reduce_v2(float* d_input, float* d_output, int tpb);
+void launch_reduce_v3(float* d_input, float* d_output, int tpb);
+void launch_reduce_v4(float* d_input, float* d_output, int tpb);
+void launch_reduce_v5(float* d_input, float* d_output, int tpb);
+void launch_reduce_v6(float* d_input, float* d_output, int tpb);
+void launch_reduce_v7(float* d_input, float* d_output, int tpb);
+void launch_reduce_v8(float* d_input, float* d_output, int tpb);

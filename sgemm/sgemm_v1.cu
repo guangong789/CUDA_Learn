@@ -32,7 +32,7 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     }
 }
 
-void launch_v1(float *a, float *b, float *c) {
+void launch_sgemm_v1(float *a, float *b, float *c) {
     constexpr unsigned int M_PER_BLOCK{32};
     constexpr unsigned int N_PER_BLOCK{32};
     constexpr unsigned int K_PER_BLOCK{32};
@@ -69,7 +69,7 @@ int main() {
 
     // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
-    launch_v1(mA_device, mB_device, mC_device);
+    launch_sgemm_v1(mA_device, mB_device, mC_device);
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
     // sgemm_cmp(mC_host_cpu, mC_host_gpu);

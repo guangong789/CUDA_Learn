@@ -1,7 +1,7 @@
 #include <cublas_v2.h>
 #include <sgemm_global.cuh>
 
-void launch_cublas_sgemm(float *a, float *b, float *c) {
+void launch_sgemm_cublas(float *a, float *b, float *c) {
     cublasHandle_t handle;
 
     cublasCreate(&handle);
@@ -43,7 +43,7 @@ int main() {
 
     // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
-    launch_cublas_sgemm(mA_device, mB_device, mC_device);
+    launch_sgemm_cublas(mA_device, mB_device, mC_device);
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
     // sgemm_cmp(mC_host_cpu, mC_host_gpu);

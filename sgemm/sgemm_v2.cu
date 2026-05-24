@@ -53,7 +53,7 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     }
 }
 
-void launch_v2(float *a, float *b, float *c) {
+void launch_sgemm_v2(float *a, float *b, float *c) {
     constexpr unsigned int STRIDE{2};  // 每线程处理的数据 2*2
     constexpr unsigned int THREAD_CNT_M{16};
     constexpr unsigned int THREAD_CNT_N{16};  // 线程数
@@ -92,7 +92,7 @@ int main() {
 
     // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
-    launch_v2(mA_device, mB_device, mC_device);
+    launch_sgemm_v2(mA_device, mB_device, mC_device);
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
     // sgemm_cmp(mC_host_cpu, mC_host_gpu);

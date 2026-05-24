@@ -91,11 +91,11 @@ inline void sgemm_cpu(float *a, float *b, float *c) {
     }
 }
 
-void launch_v0(float *a, float *b, float *c);
-void launch_v1(float *a, float *b, float *c);
-void launch_v2(float *a, float *b, float *c);
-void launch_v3(float *a, float *b, float *c);
-void launch_v4(float *a, float *b, float *c);
-void launch_v5(float *a, float *b, float *c);
-void launch_v6(float *a, float *b, float *c);
-void launch_cublas_sgemm(float *a, float *b, float *c);
+void launch_sgemm_v0(float *a, float *b, float *c);
+void launch_sgemm_v1(float *a, float *b, float *c);
+void launch_sgemm_v2(float *a, float *b, float *c);
+void launch_sgemm_v3(float *a, float *b, float *c);
+void launch_sgemm_v4(float *a, float *b, float *c);
+void launch_sgemm_v5(float *a, float *b, float *c);
+void launch_sgemm_v6(float *a, float *b, float *c);
+void launch_sgemm_cublas(float *a, float *b, float *c);
