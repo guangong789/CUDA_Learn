@@ -6,14 +6,15 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
-constexpr int N = 33554431;
+constexpr int N = 67108864;
 constexpr int THREAD_PER_BLOCK = 256;
+constexpr int NUM_PER_THREAD = 8;
 
 constexpr int ALIGNMENT = 1024 * THREAD_PER_BLOCK;
 constexpr int N_PADDED = ((N + ALIGNMENT - 1) / ALIGNMENT) * ALIGNMENT;
 
 inline void reduce_cpu(int tpb, const float* input, float* res) {
-    const int BLOCK_NUM = N / tpb; 
+    const int BLOCK_NUM = N_PADDED / tpb; 
     for (int i = 0; i < BLOCK_NUM; ++i) {
         float cur = 0.0f;
         for (int j = 0; j < tpb; ++j) {

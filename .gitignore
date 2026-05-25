@@ -34,9 +34,6 @@ compile_commands.json
 *.cubin
 
 output/
-*.jpg
-*.jpeg
-*.png
 *.bmp
 
 !input/

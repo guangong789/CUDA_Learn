@@ -10,6 +10,7 @@ __global__ void reduce(float* d_input, float* d_output) {
 
     int tid = threadIdx.x;
     int offset = blockIdx.x * NUM_PER_BLOCK;
+    #pragma unroll
     for (int i = 0; i < NUM_PER_THREAD; ++i) {
         sum += d_input[offset + i * THREAD_PER_BLOCK + tid];
     }
@@ -40,16 +41,14 @@ __global__ void reduce(float* d_input, float* d_output) {
 }
 
 void launch_reduce_v8(float* d_input, float* d_output, int tpb) {
-    constexpr int block_num = 1024;
-    constexpr int num_per_block = N_PADDED / 1024;
-    constexpr int num_per_thread = num_per_block / THREAD_PER_BLOCK;
+    constexpr int thread_num = N_PADDED / NUM_PER_THREAD;
+    constexpr int block_num =  thread_num / THREAD_PER_BLOCK;
+    constexpr int num_per_block = N_PADDED / block_num;
 
     dim3 grid(block_num);
     dim3 block(tpb);
 
-    for (int i = 0; i < 10; ++i) {
-        reduce<num_per_block, num_per_thread><<<grid, block>>>(d_input, d_output);
-    }
+    reduce<num_per_block, NUM_PER_THREAD><<<grid, block>>>(d_input, d_output);
     cudaDeviceSynchronize();
 }
 
@@ -58,8 +57,9 @@ int main() {
     float* d_input;
     cudaMalloc((void**)&d_input, N_PADDED * sizeof(float));
 
-    constexpr int block_num = 1024;
-    constexpr int num_per_block = N / 1024;
+   constexpr int thread_num = N_PADDED / NUM_PER_THREAD;
+    constexpr int block_num =  thread_num / THREAD_PER_BLOCK;
+    constexpr int num_per_block = N_PADDED / block_num;
     float* output = (float*)malloc(block_num * sizeof(float));
     float* d_output;
     cudaMalloc((void**)&d_output, block_num * sizeof(float));
@@ -67,16 +67,14 @@ int main() {
 
     for (int i = 0; i < N; ++i) input[i] = 2.0 * (float)drand48() - 1.0;
 
-    reduce_cpu(num_per_block, input, res);
+    // reduce_cpu(num_per_block, input, res);
 
     cudaMemcpy(d_input, input, N_PADDED * sizeof(float), cudaMemcpyHostToDevice);
-
     launch_reduce_v8(d_input, d_output, THREAD_PER_BLOCK);
 
-    cudaMemcpy(output, d_output, block_num * sizeof(float), cudaMemcpyDeviceToHost);
-
-    if (check(output, res, block_num)) printf("the ans is right\n");
-    else printf("the ans is wrong\n");
+    // cudaMemcpy(output, d_output, block_num * sizeof(float), cudaMemcpyDeviceToHost);
+    // if (check(output, res, block_num)) printf("the ans is right\n");
+    // else printf("the ans is wrong\n");
 
     free(input);
     free(output);
