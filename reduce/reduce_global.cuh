@@ -6,6 +6,8 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
+#define FETCH_FLOAT4(pointer) (reinterpret_cast<const float4*>(pointer)[0])
+
 constexpr int N = 67108864;
 constexpr int THREAD_PER_BLOCK = 256;
 constexpr int NUM_PER_THREAD = 8;
@@ -41,4 +43,3 @@ void launch_reduce_v4(float* d_input, float* d_output, int tpb);
 void launch_reduce_v5(float* d_input, float* d_output, int tpb);
 void launch_reduce_v6(float* d_input, float* d_output, int tpb);
 void launch_reduce_v7(float* d_input, float* d_output, int tpb);
-void launch_reduce_v8(float* d_input, float* d_output, int tpb);

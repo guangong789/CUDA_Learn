@@ -12,7 +12,7 @@ foreach(source_file ${REDUCE_SOURCES})
     
     target_compile_options(${exe_name} PRIVATE
         $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-g -G>
-        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-lineinfo>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-lineinfo -Xptxas=-v>
     )
 
     # target_link_libraries(${exe_name} PRIVATE cublas)

@@ -7,7 +7,7 @@ __global__ void reduce(float* d_input, float* d_output) {
     __shared__ float shared[TPB];  // shared memory 32个bank(4字节)
 
     int tx = threadIdx.x;
-    int tid = blockIdx.x * blockDim.x + tx;
+    int tid = blockIdx.x * blockDim.x + tx; 
     shared[tx] = d_input[tid];
     __syncthreads();
 

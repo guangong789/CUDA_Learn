@@ -1,74 +1,110 @@
 #include <reduce_global.cuh>
 #include <cub/cub.cuh>
 
-// CUB REFERENCE
+template<int NUM_PER_BLOCK, int TPB>
+__global__ void reduce(float* d_input, float* d_output)
+{
+    using Vec = float4;
 
-template <int NUM_PER_BLOCK, int NUM_PER_THREAD, int TPB>
-__global__ void reduce(float* d_input, float* d_output) {
-    using BlockLoad   = cub::BlockLoad<float, TPB, NUM_PER_THREAD, cub::BLOCK_LOAD_WARP_TRANSPOSE>;
-    using BlockReduce = cub::BlockReduce<float, TPB>;
+    constexpr int VEC_PER_THREAD = 2;
+    constexpr int FLOAT_PER_VEC  = 4;
 
-    __shared__ union TempStorage {
-        typename BlockLoad::TempStorage   load;
+    using BlockLoad =
+        cub::BlockLoad<
+            Vec,
+            TPB,
+            VEC_PER_THREAD,
+            cub::BLOCK_LOAD_DIRECT>;
+
+    using BlockReduce =
+        cub::BlockReduce<
+            float,
+            TPB,
+            cub::BLOCK_REDUCE_RAKING_COMMUTATIVE_ONLY>;
+
+    __shared__ union {
+        typename BlockLoad::TempStorage load;
         typename BlockReduce::TempStorage reduce;
     } temp;
 
-    int offset = blockIdx.x * NUM_PER_BLOCK;
-    float thread_data[NUM_PER_THREAD];
+    int offset =
+        blockIdx.x * NUM_PER_BLOCK;
 
-    BlockLoad(temp.load).Load(d_input + offset, thread_data);
+    Vec thread_data[VEC_PER_THREAD];
 
-    __syncthreads(); 
+    BlockLoad(temp.load).Load(
+        reinterpret_cast<Vec*>(d_input)
+        + offset / FLOAT_PER_VEC,
+        thread_data);
+
+    __syncthreads();
 
     float thread_sum = 0.f;
+
     #pragma unroll
-    for (int i = 0; i < NUM_PER_THREAD; i++) {
-        thread_sum += thread_data[i];
+    for(int i=0;i<VEC_PER_THREAD;++i)
+    {
+        thread_sum += thread_data[i].x;
+        thread_sum += thread_data[i].y;
+        thread_sum += thread_data[i].z;
+        thread_sum += thread_data[i].w;
     }
 
-    float block_sum = BlockReduce(temp.reduce).Sum(thread_sum);
+    float block_sum =
+        BlockReduce(temp.reduce)
+            .Sum(thread_sum);
 
-    if (threadIdx.x == 0) {
-        d_output[blockIdx.x] = block_sum;
+    if(threadIdx.x==0)
+    {
+        d_output[blockIdx.x]
+            = block_sum;
     }
 }
 
-void launch_reduce_cub(float* d_input, float* d_output, int tpb) {
-    constexpr int thread_num = N_PADDED / NUM_PER_THREAD;
-    constexpr int block_num  = thread_num / THREAD_PER_BLOCK;
-    constexpr int num_per_block = N_PADDED / block_num;
+void launch_reduce_cub(
+    float* d_input,
+    float* d_output,
+    int tpb)
+{
+    constexpr int NUM_PER_BLOCK =
+        NUM_PER_THREAD
+        * THREAD_PER_BLOCK;
 
-    dim3 grid(block_num);
+    constexpr int BLOCK_NUM =
+        N_PADDED
+        / NUM_PER_BLOCK;
+
+    dim3 grid(BLOCK_NUM);
     dim3 block(tpb);
 
-    reduce<num_per_block, NUM_PER_THREAD, THREAD_PER_BLOCK><<<grid, block>>>(d_input, d_output);
+    reduce<
+        NUM_PER_BLOCK,
+        THREAD_PER_BLOCK>
+    <<<grid,block>>>(
+        d_input,
+        d_output);
+
     cudaDeviceSynchronize();
 }
 
 int main() {
-    constexpr int thread_num = N_PADDED / NUM_PER_THREAD;
-    constexpr int block_num  = thread_num / THREAD_PER_BLOCK;
-    constexpr int num_per_block = N_PADDED / block_num;
+    constexpr int thread_num     = N_PADDED / NUM_PER_THREAD;
+    constexpr int block_num      = thread_num / THREAD_PER_BLOCK;
+    constexpr int num_per_block  = N_PADDED / block_num;
 
-    float* input = (float*)calloc(N_PADDED, sizeof(float));
+    float* input  = (float*)calloc(N_PADDED, sizeof(float));
     float* output = (float*)malloc(block_num * sizeof(float));
-    float* res = (float*)malloc(block_num * sizeof(float));
+    float* res    = (float*)malloc(block_num * sizeof(float));
 
     float* d_input;
     float* d_output;
     cudaMalloc((void**)&d_input, N_PADDED * sizeof(float));
     cudaMalloc((void**)&d_output, block_num * sizeof(float));
 
-    for (int i = 0; i < N; i++) input[i] = 2.f * (float)drand48() - 1.f;
-
-    reduce_cpu(num_per_block, input, res);
+    for (int i = 0; i < N; i++) input[i] = 2.0f * (float)drand48() - 1.0f;
 
     cudaMemcpy(d_input, input, N_PADDED * sizeof(float), cudaMemcpyHostToDevice);
     launch_reduce_cub(d_input, d_output, THREAD_PER_BLOCK);
-
-    cudaMemcpy(output, d_output, block_num * sizeof(float), cudaMemcpyDeviceToHost);
-    if (check(output, res, block_num)) printf("The ans is right\n");
-    else printf("The ans is wrong\n");
 
     cudaFree(d_input);
     cudaFree(d_output);

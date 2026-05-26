@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SRC="./reduce/reduce_global.cuh"
-BIN="./build/reduce_v1"
+BIN="./build/reduce_v4"
 
 echo "========================================="
 echo "TEST TARGET: $BIN"
