@@ -6,8 +6,6 @@ set(SGEMM_KERNELS
     sgemm_v4.cu
     sgemm_v5.cu
     sgemm_v6.cu
-    sgemm_cublas.cu
-
 )
 
 foreach(KERNEL_FILE ${SGEMM_KERNELS})
@@ -36,11 +34,11 @@ foreach(KERNEL_FILE ${SGEMM_KERNELS})
     target_compile_options(${TARGET_NAME}
         PRIVATE
         $<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-g -G>
-        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-lineinfo>
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANGUAGE:CUDA>>:-lineinfo -Xptxas=-v>
     )
-
 endforeach()
 
+# Benchmark
 add_executable(bm_sgemm
     bm_sgemm.cu
     ${SGEMM_KERNELS}

@@ -1,10 +1,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 #include <sgemm_global.cuh>
 
 constexpr int WARMUP = 10;
-constexpr int ITER = 100;
+// constexpr int ITER = 100;
+constexpr int ITER = 1;
 
 double calc_gflops(float ms) {
     double flop = 2.0 * M * N * K;
@@ -40,6 +42,21 @@ void benchmark(const char* name, void (*kernel)(float*, float*, float*), float* 
     cudaEventDestroy(stop);
 }
 
+void launch_sgemm_cublas(float *a, float *b, float *c) {
+    static cublasHandle_t handle = nullptr;
+    
+    if (handle == nullptr) {
+        cublasCreate(&handle);
+        // cublasSetMathMode(handle, CUBLAS_TF32_TENSOR_OP_MATH);
+        cublasSetMathMode(handle, CUBLAS_PEDANTIC_MATH);
+    }
+
+    float alpha = 1.0f;
+    float beta = 0.0f;
+
+    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, b, N_PAD, a, K_PAD, &beta, c, N_PAD);
+}
+
 int main() {
     constexpr size_t memA = M * K_PAD * sizeof(float);
     constexpr size_t memB = K * N_PAD * sizeof(float);
@@ -61,8 +78,9 @@ int main() {
 
     printf("===== SGEMM Benchmark =====\n");
     printf("M=%d  K=%d  N=%d\n\n", M, K, N);
-    benchmark("sgemm_v5", launch_sgemm_v5, dA, dB, dC);
-    benchmark("cuBLAS", launch_sgemm_cublas, dA, dB, dC);
+    
+    benchmark("sgemm_v1", launch_sgemm_v1, dA, dB, dC);
+    // benchmark("cuBLAS", launch_sgemm_cublas, dA, dB, dC);
 
     cudaFree(dA);
     cudaFree(dB);

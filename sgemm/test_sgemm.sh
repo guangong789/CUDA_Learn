@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SRC="./sgemm/sgemm_global.cuh"
-BIN="./build/sgemm_v6"
+BIN="./build/sgemm_v1"
 
 echo "========================================="
 echo "TEST TARGET: $BIN"
@@ -17,6 +17,7 @@ CASES=(
 "512 768 768 transformer"
 "789 567 678 irregular"
 "1025 1026 1027 pathological"
+"4096 4096 4096 for ncu profiling"
 )
 
 for CASE in "${CASES[@]}"

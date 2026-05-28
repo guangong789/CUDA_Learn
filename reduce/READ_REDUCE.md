@@ -1,3 +1,4 @@
+# `constexpr int N = 67108864;`
 # Version Reference: CUB
 ![alt text](assets/image-18.png)
 ## SOL
