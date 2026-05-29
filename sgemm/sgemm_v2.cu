@@ -10,8 +10,8 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     int block_row = blockIdx.y * TILE, block_col = blockIdx.x * TILE;  // 每个BLOCK的起始格点位置
     int thread_row = block_row + ty, thread_col = block_col + tx;  // 每个线程的起始格点位置
 
-    __shared__ float shared_a[TILE][TILE + 1];
-    __shared__ float shared_b[TILE][TILE + 1];
+    __shared__ float shared_a[TILE][TILE];
+    __shared__ float shared_b[TILE][TILE];
     float tmp[STRIDE][STRIDE] = {0.0f};
 
     int smem_row{0}, smem_col{0};

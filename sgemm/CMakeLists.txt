@@ -5,7 +5,6 @@ set(SGEMM_KERNELS
     sgemm_v3.cu
     sgemm_v4.cu
     sgemm_v5.cu
-    sgemm_v6.cu
 )
 
 foreach(KERNEL_FILE ${SGEMM_KERNELS})

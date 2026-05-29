@@ -18,8 +18,8 @@ constexpr int M{4096};
 constexpr int K{4096};
 constexpr int N{4096};
 
-constexpr int K_PAD = ((K + 3) / 4) * 4;
-constexpr int N_PAD = ((N + 3) / 4) * 4;
+constexpr int K_PAD = ((K + 7) / 8) * 8;
+constexpr int N_PAD = ((N + 7) / 8) * 8;
 
 #define A(i,j) a[(i)*K_PAD + (j)]
 #define B(i,j) b[(i)*N_PAD + (j)]
@@ -97,5 +97,4 @@ void launch_sgemm_v2(float *a, float *b, float *c);
 void launch_sgemm_v3(float *a, float *b, float *c);
 void launch_sgemm_v4(float *a, float *b, float *c);
 void launch_sgemm_v5(float *a, float *b, float *c);
-void launch_sgemm_v6(float *a, float *b, float *c);
 void launch_sgemm_cublas(float *a, float *b, float *c);

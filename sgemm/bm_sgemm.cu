@@ -79,7 +79,7 @@ int main() {
     printf("===== SGEMM Benchmark =====\n");
     printf("M=%d  K=%d  N=%d\n\n", M, K, N);
     
-    benchmark("sgemm_v1", launch_sgemm_v1, dA, dB, dC);
+    benchmark("sgemm_v3", launch_sgemm_v3, dA, dB, dC);
     // benchmark("cuBLAS", launch_sgemm_cublas, dA, dB, dC);
 
     cudaFree(dA);
