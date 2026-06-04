@@ -10,9 +10,9 @@
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4 *>(&(pointer))[0])
 
 // MATRIX
-// constexpr int M{4097};
-// constexpr int K{4098};
-// constexpr int N{4099};
+// constexpr int M{1025};
+// constexpr int K{1026};
+// constexpr int N{1027};
 
 constexpr int M{4096};
 constexpr int K{4096};
@@ -97,4 +97,5 @@ void launch_sgemm_v2(float *a, float *b, float *c);
 void launch_sgemm_v3(float *a, float *b, float *c);
 void launch_sgemm_v4(float *a, float *b, float *c);
 void launch_sgemm_v5(float *a, float *b, float *c);
+void launch_sgemm_v6(float *a, float *b, float *c);
 void launch_sgemm_cublas(float *a, float *b, float *c);

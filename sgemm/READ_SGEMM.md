@@ -72,6 +72,18 @@ MIO 限流停顿：NCU 提示平均每个 warp 要花 23.1 个 cycle 等待 MIO 
 ![alt text](assets/image-28.png)  
 现在的代码，性能已经接近 cublas 的 $\tfrac{1}{3}$ 了
 # VERSION 3: Register Tiling  
-
+![alt text](assets/image-31.png)  
+使用 float4 来搬运数据后，代码获得了 52.8% Latency Reduction 和 2.12× Speedup
 ## Overview  
-![alt text](assets/image-29.png)  
+![alt text](assets/image-30.png)  
+## SOL  
+![alt text](assets/image-32.png)  
+sol 中 compute throughput 减少了接近一半，说明计算效率大大提高，由于使用了更大的寄存器分块，使 memory throughput 减小了 17%，而 float4 的使用，此时访存指令更加紧凑合并，使 L2 cache / DRAM throughput 均提升至上一版本的 3 倍以上
+## Memory Workload Analysis  
+![alt text](assets/image-33.png)  
+![alt text](assets/image-34.png)  
+该版本的 memory throughput 为 264.5 GB/s，相较上一版提升了 256%，此时已经达到了硬件带宽的 78%, 由于访存指令的优化, mem pipeline busy 减少了 56%, 极大缓解了管线的空转  
+
+![alt text](assets/image-35.png)  
+
+## 

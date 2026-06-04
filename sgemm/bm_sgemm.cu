@@ -51,7 +51,7 @@ void launch_sgemm_cublas(float *a, float *b, float *c) {
         cublasSetMathMode(handle, CUBLAS_PEDANTIC_MATH);
     }
 
-    float alpha = 1.0f;
+    float alpha = 1.0f;  
     float beta = 0.0f;
 
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, b, N_PAD, a, K_PAD, &beta, c, N_PAD);
@@ -80,6 +80,7 @@ int main() {
     printf("M=%d  K=%d  N=%d\n\n", M, K, N);
     
     benchmark("sgemm_v3", launch_sgemm_v3, dA, dB, dC);
+    // benchmark("sgemm_v4", launch_sgemm_v4, dA, dB, dC);
     // benchmark("cuBLAS", launch_sgemm_cublas, dA, dB, dC);
 
     cudaFree(dA);

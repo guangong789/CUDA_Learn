@@ -13,11 +13,11 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     int thread_row = ty * M_PER_THREAD;
     int thread_col = tx * N_PER_THREAD;
 
-    __shared__ float shared_a[M_PER_BLOCK][K_PER_BLOCK];  // {128, 8}
-    __shared__ float shared_b[K_PER_BLOCK][N_PER_BLOCK];  // {8, 128}
+    __shared__ float shared_a[M_PER_BLOCK][K_PER_BLOCK];  // {64, 16}
+    __shared__ float shared_b[K_PER_BLOCK][N_PER_BLOCK];  // {16, 64}
     float reg_a[M_PER_THREAD] = {0.0f};
-    float reg_b[N_PER_THREAD] = {0.0f}; 
-    float tmp[M_PER_THREAD][N_PER_THREAD] = {0.0f};  // 8*8
+    float reg_b[N_PER_THREAD] = {0.0f};
+    float tmp[M_PER_THREAD][N_PER_THREAD] = {0.0f};  // 4*4
 
     #pragma unroll
     for (int t = 0; t < TILE_CNT; ++t) {  // 分块加载
@@ -60,11 +60,11 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
         int valid_k = (t == TILE_CNT - 1) ? (K - t * K_PER_BLOCK) : K_PER_BLOCK;
         #pragma unroll
         for (int k = 0; k < valid_k; ++k) {
-            for (int i = 0; i < 8; ++i) {
-                reg_a[i] = shared_a[thread_row + i][k];
-            }
+            reg_a[0] = shared_a[thread_row + 0][k];
+            reg_a[1] = shared_a[thread_row + 1][k];
+            reg_a[2] = shared_a[thread_row + 2][k];
+            reg_a[3] = shared_a[thread_row + 3][k];
             FETCH_FLOAT4(reg_b[0]) = FETCH_FLOAT4(shared_b[k][thread_col]);
-            FETCH_FLOAT4(reg_b[4]) = FETCH_FLOAT4(shared_b[k][thread_col + 4]);
             for (int i = 0; i < M_PER_THREAD; ++i) {
                 for (int j = 0; j < N_PER_THREAD; ++j) {
                     tmp[i][j] += reg_a[i] * reg_b[j];
@@ -77,9 +77,8 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     for (int i = 0; i < M_PER_THREAD; ++i) {
         int global_row = block_row + thread_row + i;
         int global_col = block_col + thread_col;
-        if (global_row < M && global_col + 7 < N) {
+        if (global_row < M && global_col + 3 < N) {
             FETCH_FLOAT4(C(global_row, global_col)) = FETCH_FLOAT4(tmp[i][0]);
-            FETCH_FLOAT4(C(global_row, global_col + 4)) = FETCH_FLOAT4(tmp[i][4]);
         } else if (global_row < M) {
             for (int j = 0; global_col + j < N; ++j) {
                 C(global_row, global_col + j) = tmp[i][j];
@@ -89,16 +88,16 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
 }
 
 void launch_sgemm_v3(float *a, float *b, float *c) {
-    constexpr unsigned int M_PER_BLOCK{128};
-    constexpr unsigned int N_PER_BLOCK{128};
-    constexpr unsigned int K_PER_BLOCK{8};
-    constexpr unsigned int M_PER_THREAD{8};
-    constexpr unsigned int N_PER_THREAD{8};
+    constexpr unsigned int M_PER_BLOCK{64};
+    constexpr unsigned int N_PER_BLOCK{64};
+    constexpr unsigned int K_PER_BLOCK{16};
+    constexpr unsigned int M_PER_THREAD{4};
+    constexpr unsigned int N_PER_THREAD{4};
 
     constexpr unsigned int M_THREAD_PER_BLOCK = M_PER_BLOCK / M_PER_THREAD;
     constexpr unsigned int N_THREAD_PER_BLOCK = N_PER_BLOCK / N_PER_THREAD;  // 16
 
-    dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK};  // block(16, 16), float4 加载，每线程加载 1 float4, 计算 8*8
+    dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK};  // block(16, 16), float4 加载，每线程加载 1 float4, 计算 4*4
     dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
     sgemm_gpu<M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK, M_PER_THREAD, N_PER_THREAD><<<grid, block>>>(a, b, c);
 
