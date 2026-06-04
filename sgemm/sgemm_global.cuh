@@ -97,5 +97,4 @@ void launch_sgemm_v2(float *a, float *b, float *c);
 void launch_sgemm_v3(float *a, float *b, float *c);
 void launch_sgemm_v4(float *a, float *b, float *c);
 void launch_sgemm_v5(float *a, float *b, float *c);
-void launch_sgemm_v6(float *a, float *b, float *c);
 void launch_sgemm_cublas(float *a, float *b, float *c);

@@ -14,7 +14,7 @@
 ## Memory WorkLoad Analysis  
 ![alt text](assets/image-5.png)  
 ![alt text](assets/image-6.png)  
-在 `{4096, 4096, 4096}` 的测试规模下，由于每个线程只处理一个点，`value += A(row, k) * B(k, col)` 最终会有 $4096\times4096\times2\times4096\div32=4294967296$ 条指令，在同一个 warp 中，线程都访问的是 A 的同一个 float，触发广播，只需要一个 sector；对于 B，warp 会访问 32 个不同的 float，而一个 sector 32 字节，8 个 float，这样一条指令需要请求 4 个 sector，$(1+4)\div2=2.5(sector/request)$，与 NCU 显示数据相符合，此时程序的总 sector 就为 $4294967296\times2.5=10737418240$，sector misses to L2 一共有 536870912，$536870912\div10737418240=0.05$，刚好对应 memory analysis 显示的 L1 Hit Rate = 95%  
+在 `{4096, 4096, 4096}` 的测试规模下，由于每个线程只处理一个点，`value += A(row, k) * B(k, col)` 最终会有 $4096\times4096\times2\times4096\div32=4294967296$ 条指令，在同一个 warp 中，线程都访问的是 A 的同一个 float，触发广播，只需要一个 sector；对于 B，warp 会访问 32 个不同的 float，而一个 sector 32 字节，8 个 float，这样一条指令需要请求 4 个 sector，$(1+4) \div 2=2.5$ (sector/request)，与 NCU 显示数据相符合，此时程序的总 sector 就为 $4294967296\times2.5=10737418240$，sector misses to L2 一共有 536870912，$536870912 \div 10737418240=0.05$，刚好对应 memory analysis 显示的 L1 Hit Rate = 95%  
 ## Scheduler Statistics  
 ![alt text](assets/image-7.png)  
 ![alt text](assets/image-8.png)  
@@ -85,5 +85,20 @@ sol 中 compute throughput 减少了接近一半，说明计算效率大大提�
 该版本的 memory throughput 为 264.5 GB/s，相较上一版提升了 256%，此时已经达到了硬件带宽的 78%, 由于访存指令的优化, mem pipeline busy 减少了 56%, 极大缓解了管线的空转  
 
 ![alt text](assets/image-35.png)  
+由于使用 float4 写回, 现在 global store instructions 相较上一版逐个写回刚好减少了 $\tfrac{3}{4}$.在 v2 的代码中, blocks 总数为 $\tfrac{4096}{32}\times\tfrac{4096}{32}=16384$, tile_cnt = $4096 \div 32 = 128$, 总 shared mem 数量为 2048 个 float, 故最终 global load instructions 为 $16384\times2048\times128\div32=134,217,728$, v3 的总 load instructions 为 $\tfrac{4096}{64}\times\tfrac{4096}{64}\times\tfrac{2048}{4}\times\tfrac{4096}{16}\div32=	16,777,216$, 的确是降低了 87.5%
+## Scheduler Statistics
+![alt text](assets/image-36.png)  
+![alt text](assets/image-37.png)  
+调度器的数据有了很好的提升, 在 mem pipeline busy 从原本的 97% 降低到 42% 过后, 内存管线解决了拥堵状态, 现在平均发射的效率增加了 34%, 达到 0.5, 使排队的 warp 也更少了, 还能发现调度器的空转时间又减少 2 成, 现在 Eligible 的时间已经和空转时间持平
+## Occupancy  
+![alt text](assets/image-38.png)  
+在这一版中, 由于寄存器的使用数量从 40 增加到了 56, 导致占有率减少了 $\tfrac{1}{3}$, 设备的每一个 SM 有 65536 个寄存器, 最多 48 个 warps 即 1536 个 线程, 这一版代码的规模是 256 threads per block, 如果不考虑寄存器限制可以放下 6 个 block, 考虑寄存器 $65536\div56=1170.$, $1170\div256=4.$, 此时一个 SM 最多只能放下 4 个 block, 导致占有率并非最优
+## Summary  
+L1TEX Local Store Access Pattern  
+Long Scoreboard Stalls  
 
-## 
+可能是因为寄存器溢出导致写回 local memory 时 sector 的浪费  
+
+![alt text](assets/image-39.png)  
+现在的代码, 性能接近 cublas 的一半了
+# VERSUION 4: Transpose  
