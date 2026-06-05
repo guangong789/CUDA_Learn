@@ -1,3 +1,8 @@
+```
+在写 readme 的过程中发现自 version 3 开始，测试程序在连续高频运行时出现严重的性能分级跳变：sgemm_v3 耗时在 29ms (4700 GFLOPS) 与 51ms (2700 GFLOPS) 两个固定档位剧烈横跳。对照组 cuBLAS 亦受到波及，后期算力从 6400 GFLOPS 跌至 5000 GFLOPS。
+猜测可能是因为 WSL2 环境下的硬件功耗与温度导致，所以从 version 3 及以后的性能对比，开始采用多次 benchmark 中的性能峰值进行比较。
+这可能会导致文中 benchmark 与 ncu profiling 的数据不能自洽，但是 ncu 关注的是硬件微观层面的比例与瓶颈，而 benchmark 关注宏观层面的性能极限，所以二者核心结论并不冲突。
+```
 # `constexpr int M{4096}, K{4096}, N{4096};`
 # VERSION REFERENCE: CUBLAS  
 ![alt text](assets/image.png)  
@@ -99,6 +104,43 @@ Long Scoreboard Stalls
 
 可能是因为寄存器溢出导致写回 local memory 时 sector 的浪费  
 
-![alt text](assets/image-39.png)  
-现在的代码, 性能接近 cublas 的一半了
+![alt text](assets/image-42.png)  
+现在的代码, 性能接近 cublas 的 $\tfrac{3}{4}$ 了
 # VERSUION 4: Transpose  
+![alt text](assets/image-40.png)  
+采用先将 shared_a 转置之后, 代码并没有获得提升, 性能还有一点降低, 虽然现在在计算时可以直接使用两个 float4 load 指令就能做外积, 但是这个中转的过程又会增加指令. 而且可以发现, 即使多加了一个 register for trans load, 代码总共寄存器反而比上一版少了一个, 可能是因为这个 trans load register 的生命周期更加明确, 能够更好地复用寄存器.  
+## Memory Workload Analysis  
+![alt text](assets/image-41.png)  
+可以假设上一版 shared_a, shared_b 均使用 float4 store 的时候各用 1 个指令, 现在 shared_a 改成标量 store 之后完成同样的事需要 4 个指令, $\tfrac{1+4}{1+1}=2.5$ 正好是原来的 2.5 倍, 增加了 150%. 还能发现该版本产生了之前没有的 store bank conflict, 对相关代码进行分析:  
+```cpp
+__shared__ float shared_a[K_PER_BLOCK][M_PER_BLOCK];  // transpose to {16, 64}
+int s_row = tid / (K_PER_BLOCK / 4); 
+int s_col = (tid % (K_PER_BLOCK / 4)) * 4;
+shared_a[s_col + 0][s_row] = trans_load[0];
+shared_a[s_col + 1][s_row] = trans_load[1];
+shared_a[s_col + 2][s_row] = trans_load[2];
+shared_a[s_col + 3][s_row] = trans_load[3];
+```  
+$bankID=(row\times64+col)\bmod32=col\bmod32$, 映射的位置只与 col 即代码中的 s_row 有关  
+|tid|s_row=tid/4|bankID|
+|:-:|:---------:|:----:|
+|0  |0          |0     |
+|1  |0          |0     |
+|2  |0          |0     |
+|3  |0          |0     |
+|4  |1          |1     |
+|5  |1          |1     |
+|6  |1          |1     |
+|7  |1          |1     |  
+产生了 4 路 bank conflict, 拉长了时钟周期  
+## Summary  
+Shared Store Bank Conflicts: The memory access pattern for shared stores might not be optimal and causes on average a 4.0 - way bank conflict across all 41943040 shared store requests.This results in 100663296 bank conflicts, which represent 60.00% of the overall 167772160 wavefronts for shared stores.
+
+ncu summary 的确提示代码在 shared store 时产生了 4 路冲突  
+
+![alt text](assets/image-43.png)  
+由于该版本 transpose 优化有得有失，实际性能提升微乎其微  
+# VERSION 5: Double Buffer  
+
+## Overview  
+![alt text](assets/image-44.png) 

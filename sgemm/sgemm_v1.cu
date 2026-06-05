@@ -40,8 +40,6 @@ void launch_sgemm_v1(float *a, float *b, float *c) {
     dim3 block{N_PER_BLOCK, M_PER_BLOCK};
     dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
     sgemm_gpu<M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK><<<grid, block>>>(a, b, c);
-
-    cudaDeviceSynchronize();
 }
 
 #ifdef SGEMM_STANDALONE
@@ -70,6 +68,7 @@ int main() {
     // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
     launch_sgemm_v1(mA_device, mB_device, mC_device);
+    cudaDeviceSynchronize();
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
     // sgemm_cmp(mC_host_cpu, mC_host_gpu);

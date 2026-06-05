@@ -63,8 +63,6 @@ void launch_sgemm_v2(float *a, float *b, float *c) {
     dim3 block{THREAD_CNT_N, THREAD_CNT_M};
     dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK -1) / M_PER_BLOCK};  // 减少块的数量，增加每个线程的工作量
     sgemm_gpu<THREAD_CNT_N, STRIDE, N_PER_BLOCK><<<grid, block>>>(a, b, c);
-
-    cudaDeviceSynchronize();
 }
 
 #ifdef SGEMM_STANDALONE
@@ -93,6 +91,7 @@ int main() {
     // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
     launch_sgemm_v2(mA_device, mB_device, mC_device);
+    cudaDeviceSynchronize();
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
     // sgemm_cmp(mC_host_cpu, mC_host_gpu);

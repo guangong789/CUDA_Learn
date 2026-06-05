@@ -3,34 +3,35 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <sgemm_global.cuh>
+#include <unistd.h>
 
-constexpr int WARMUP = 10;
-// constexpr int ITER = 100;
-constexpr int ITER = 1;
+constexpr int WARMUP = 20;
+constexpr int ITER = 200;
+// constexpr int ITER = 1;
 
 double calc_gflops(float ms) {
     double flop = 2.0 * M * N * K;
     return flop / (ms * 1e6);
 }
 
-void benchmark(const char* name, void (*kernel)(float*, float*, float*), float* dA, float* dB, float* dC) {
+void benchmark(const char* name, void (*kernel)(float*, float*, float*), float* dA, float* dB, float* dC){
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    for (int i = 0; i < WARMUP; ++i) {
+    for (int i = 0; i < WARMUP; i++) {
         kernel(dA, dB, dC);
     }
     cudaDeviceSynchronize();
 
     cudaEventRecord(start);
-    for (int i = 0; i < ITER; ++i) {
+    for (int i = 0; i < ITER; i++) {
         kernel(dA, dB, dC);
     }
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 
-    float total_ms = 0.0f;
+    float total_ms;
     cudaEventElapsedTime(&total_ms, start, stop);
 
     float avg_ms = total_ms / ITER;
@@ -78,10 +79,16 @@ int main() {
 
     printf("===== SGEMM Benchmark =====\n");
     printf("M=%d  K=%d  N=%d\n\n", M, K, N);
+    printf("Warming up GPU Power State (P-State Transition)...\n");
+    for (int i = 0; i < 50; i++) {
+        launch_sgemm_v5(dA, dB, dC); 
+    }
+    cudaDeviceSynchronize();
+    printf("Stabilizing thermal conditions...\n");
+    sleep(1);
     
-    benchmark("sgemm_v3", launch_sgemm_v3, dA, dB, dC);
-    // benchmark("sgemm_v4", launch_sgemm_v4, dA, dB, dC);
-    // benchmark("cuBLAS", launch_sgemm_cublas, dA, dB, dC);
+    benchmark("sgemm_v5", launch_sgemm_v5, dA, dB, dC);
+    benchmark("cuBLAS", launch_sgemm_cublas, dA, dB, dC);
 
     cudaFree(dA);
     cudaFree(dB);

@@ -1,6 +1,6 @@
 #include <sgemm_global.cuh>
 
-// REGISTER TILING
+// REGISTER TILING 
 
 template<unsigned int M_PER_BLOCK, unsigned int N_PER_BLOCK, unsigned int K_PER_BLOCK, 
     unsigned int M_PER_THREAD, unsigned int N_PER_THREAD>
@@ -8,21 +8,21 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     constexpr unsigned int TILE_CNT = (K + K_PER_BLOCK - 1) / K_PER_BLOCK;
     int tx = threadIdx.x, ty = threadIdx.y;  // [0, 15]
     int block_row = blockIdx.y * M_PER_BLOCK;
-    int block_col = blockIdx.x * N_PER_BLOCK;
+    int block_col = blockIdx.x * N_PER_BLOCK;  
     // 块内每线程负责的起始点
     int thread_row = ty * M_PER_THREAD;
     int thread_col = tx * N_PER_THREAD;
+    int tid = ty * blockDim.x + tx; 
 
     __shared__ float shared_a[M_PER_BLOCK][K_PER_BLOCK];  // {64, 16}
     __shared__ float shared_b[K_PER_BLOCK][N_PER_BLOCK];  // {16, 64}
-    float reg_a[M_PER_THREAD] = {0.0f};
+    float reg_a[M_PER_THREAD] = {0.0f};  
     float reg_b[N_PER_THREAD] = {0.0f};
     float tmp[M_PER_THREAD][N_PER_THREAD] = {0.0f};  // 4*4
 
     #pragma unroll
     for (int t = 0; t < TILE_CNT; ++t) {  // 分块加载
         // shared_a
-        int tid = ty * blockDim.x + tx; 
         {
             int s_row = (tid * 4) / K_PER_BLOCK; 
             int s_col = (tid * 4) % K_PER_BLOCK;
@@ -100,8 +100,6 @@ void launch_sgemm_v3(float *a, float *b, float *c) {
     dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK};  // block(16, 16), float4 加载，每线程加载 1 float4, 计算 4*4
     dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
     sgemm_gpu<M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK, M_PER_THREAD, N_PER_THREAD><<<grid, block>>>(a, b, c);
-
-    cudaDeviceSynchronize();
 }
 
 #ifdef SGEMM_STANDALONE
@@ -130,6 +128,7 @@ int main() {
     // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
     launch_sgemm_v3(mA_device, mB_device, mC_device);
+    cudaDeviceSynchronize();
 
     // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
     // sgemm_cmp(mC_host_cpu, mC_host_gpu);

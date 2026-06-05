@@ -6,51 +6,61 @@ template<unsigned int M_PER_BLOCK, unsigned int N_PER_BLOCK, unsigned int K_PER_
     unsigned int M_PER_THREAD, unsigned int N_PER_THREAD>
 __global__ void sgemm_gpu(float *a, float *b, float *c) {
     constexpr unsigned int TILE_CNT = (K + K_PER_BLOCK - 1) / K_PER_BLOCK;
-    int tx = threadIdx.x, ty = threadIdx.y;  // [0, 8)
+    int tx = threadIdx.x, ty = threadIdx.y;  // [0, 15]
     int block_row = blockIdx.y * M_PER_BLOCK;
     int block_col = blockIdx.x * N_PER_BLOCK;
     // 每线程负责的起始点
     int thread_row = ty * M_PER_THREAD;
     int thread_col = tx * N_PER_THREAD;
+    int tid = ty * blockDim.x + tx;
 
-    __shared__ float shared_a[K_PER_BLOCK][M_PER_BLOCK];  // 32*32
-    __shared__ float shared_b[K_PER_BLOCK][N_PER_BLOCK];
-    float reg_for_trans[M_PER_THREAD] = {0.0f};
-    float reg_a[M_PER_THREAD] = {0.0f};  // 4 scalars
-    float reg_b[N_PER_THREAD] = {0.0f};  // 1 float4
+    __shared__ float shared_a[K_PER_BLOCK][M_PER_BLOCK];  // transpose to {16, 64}
+    __shared__ float shared_b[K_PER_BLOCK][N_PER_BLOCK];  // {16, 64}
+    float reg_a[M_PER_THREAD] = {0.0f};
+    float reg_b[N_PER_THREAD] = {0.0f};
     float tmp[M_PER_THREAD][N_PER_THREAD] = {0.0f};  // 4*4
 
     #pragma unroll
-    for (int t = 0; t < (K + K_PER_BLOCK - 1) / K_PER_BLOCK; ++t) {  // 分块加载 
-        int col_a = t * K_PER_BLOCK + tx * 4, col_b = block_col + tx * 4;
-        for (int i = 0; i < M_PER_THREAD; ++i) {
-            int row_offset = i * blockDim.y;
-            int row_a = block_row + ty + row_offset, row_b = t * K_PER_BLOCK + ty + row_offset;
-            int smem_row = ty + row_offset, smem_col = tx * 4;
-            bool full_a = row_a < M && col_a + 3 < K;
+    for (int t = 0; t < TILE_CNT; ++t) {  // 分块加载 
+        // shared_a: transpose
+        {
+            int s_row = tid / (K_PER_BLOCK / 4); 
+            int s_col = (tid % (K_PER_BLOCK / 4)) * 4;
+            int g_row = block_row + s_row;
+            int g_col = t * K_PER_BLOCK + s_col;
+
+            float trans_load[4];
+            bool full_a = g_row < M && g_col + 3 < K;
             if (full_a) {
-                 FETCH_FLOAT4(reg_for_trans[0]) = FETCH_FLOAT4(A(row_a, col_a));
+                FETCH_FLOAT4(trans_load[0]) = FETCH_FLOAT4(A(g_row, g_col));
+                shared_a[s_col + 0][s_row] = trans_load[0];
+                shared_a[s_col + 1][s_row] = trans_load[1];
+                shared_a[s_col + 2][s_row] = trans_load[2];
+                shared_a[s_col + 3][s_row] = trans_load[3];
             } else {
                 for (int j = 0; j < 4; ++j) {
-                    reg_for_trans[j] = (row_a < M && col_a + j < K) ? A(row_a, col_a + j) : 0.0f;
+                    shared_a[s_col + j][s_row] = (g_row < M && g_col + j < K) ? A(g_row, g_col + j) : 0.0f;
                 }
             }
-            // 不同行，相同列
-            shared_a[tx*4][ty + row_offset] = reg_for_trans[0];
-            shared_a[tx*4 + 1][ty + row_offset] = reg_for_trans[1];
-            shared_a[tx*4 + 2][ty + row_offset] = reg_for_trans[2];
-            shared_a[tx*4 + 3][ty + row_offset] = reg_for_trans[3];
-            bool full_b = row_b < K && col_b < N;
+        }
+        // shared_b
+        {
+            int s_row = tid / (N_PER_BLOCK / 4);
+            int s_col = (tid % (N_PER_BLOCK / 4)) * 4;
+            int g_row = t * K_PER_BLOCK + s_row;
+            int g_col = block_col + s_col;
+
+            bool full_b = g_row < K && g_col + 3 < N;
             if (full_b) {
-                FETCH_FLOAT4(shared_b[smem_row][smem_col]) = FETCH_FLOAT4(B(row_b, col_b));
+                FETCH_FLOAT4(shared_b[s_row][s_col]) = FETCH_FLOAT4(B(g_row, g_col));
             } else {
                 for (int j = 0; j < 4; ++j) {
-                    shared_b[smem_row][smem_col + j] = (row_b < K && col_b + j < N) ? B(row_b, col_b + j) : 0.0f;
+                    shared_b[s_row][s_col + j] = (g_row < K && g_col + j < N) ? B(g_row, g_col + j) : 0.0f;
                 }
             }
         }
         __syncthreads();
-        // outer product
+        // outer product  
         int valid_k = (t == TILE_CNT - 1) ? (K - t * K_PER_BLOCK) : K_PER_BLOCK;
         #pragma unroll
         for (int k = 0; k < valid_k; ++k) {
@@ -79,20 +89,18 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
 }
 
 void launch_sgemm_v4(float *a, float *b, float *c) {
-    constexpr unsigned int M_PER_BLOCK{32};
-    constexpr unsigned int N_PER_BLOCK{32};
-    constexpr unsigned int K_PER_BLOCK{32};
+    constexpr unsigned int M_PER_BLOCK{64};
+    constexpr unsigned int N_PER_BLOCK{64};
+    constexpr unsigned int K_PER_BLOCK{16};
     constexpr unsigned int M_PER_THREAD{4};
     constexpr unsigned int N_PER_THREAD{4};
 
     constexpr unsigned int M_THREAD_PER_BLOCK = M_PER_BLOCK / M_PER_THREAD;
-    constexpr unsigned int N_THREAD_PER_BLOCK = N_PER_BLOCK / N_PER_THREAD;  // 8
+    constexpr unsigned int N_THREAD_PER_BLOCK = N_PER_BLOCK / N_PER_THREAD;  // 16
 
-    dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK};  // float4 加载，每线程计算 4*4
+    dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK};  // float4 加载，每线程加载 1 float4, 计算 4*4
     dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
     sgemm_gpu<M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK, M_PER_THREAD, N_PER_THREAD><<<grid, block>>>(a, b, c);
-
-    cudaDeviceSynchronize();
 }
 
 #ifdef SGEMM_STANDALONE
@@ -100,7 +108,7 @@ void launch_sgemm_v4(float *a, float *b, float *c) {
 int main() {
     constexpr size_t mem_size_A = M * K_PAD * sizeof(float);
     constexpr size_t mem_size_B = K * N_PAD * sizeof(float);
-    constexpr size_t mem_size_C = M * N_PAD * sizeof(float);
+    constexpr size_t mem_size_C = M * N_PAD * sizeof(float); 
 
     float *mA_host = (float *)calloc(M * K_PAD, sizeof(float));
     float *mB_host = (float *)calloc(K * N_PAD, sizeof(float));
@@ -111,19 +119,20 @@ int main() {
     random_m(K, N, mB_host);
 
     float *mA_device, *mB_device, *mC_device;
-    cudaMalloc((void **)&mA_device, mem_size_A);
+    cudaMalloc((void **)&mA_device, mem_size_A);  
     cudaMalloc((void **)&mB_device, mem_size_B);
     cudaMalloc((void **)&mC_device, mem_size_C);
 
     cudaMemcpy(mA_device, mA_host, mem_size_A, cudaMemcpyHostToDevice);
     cudaMemcpy(mB_device, mB_host, mem_size_B, cudaMemcpyHostToDevice);
 
-    // sgemm_cpu(mA_host, mB_host, mC_host_cpu);
+    sgemm_cpu(mA_host, mB_host, mC_host_cpu);
 
     launch_sgemm_v4(mA_device, mB_device, mC_device);
+    cudaDeviceSynchronize();
 
-    // cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
-    // sgemm_cmp(mC_host_cpu, mC_host_gpu);
+    cudaMemcpy(mC_host_gpu, mC_device, mem_size_C, cudaMemcpyDeviceToHost);
+    sgemm_cmp(mC_host_cpu, mC_host_gpu);
 
     cudaFree(mA_device);
     cudaFree(mB_device);
