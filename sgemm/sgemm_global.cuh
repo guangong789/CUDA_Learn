@@ -14,9 +14,9 @@
 // constexpr int K{1026};
 // constexpr int N{1027};
 
-constexpr int M{4097};
-constexpr int K{4098};
-constexpr int N{4099};
+constexpr int M{4096};
+constexpr int K{4096};
+constexpr int N{4096};
 
 constexpr int K_PAD = ((K + 7) / 8) * 8;
 constexpr int N_PAD = ((N + 7) / 8) * 8;
