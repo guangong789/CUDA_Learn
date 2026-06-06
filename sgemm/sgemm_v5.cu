@@ -59,12 +59,12 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
     float tmp[M_PER_THREAD][N_PER_THREAD] = {0.0f};
 
     int cur = 0;
-    int next = 1;
+    int next = 1;  
 
     load_shared_a<M_PER_BLOCK, K_PER_BLOCK>(a, shared_a, tid, block_row, 0, cur);
     load_shared_b<N_PER_BLOCK, K_PER_BLOCK>(b, shared_b, tid, block_col, 0, cur);
     __syncthreads();
-
+  
     for (int t = 0; t < (int)TILE_CNT - 1; ++t) {
         load_shared_a<M_PER_BLOCK, K_PER_BLOCK>(a, shared_a, tid, block_row, t + 1, next);
         load_shared_b<N_PER_BLOCK, K_PER_BLOCK>(b, shared_b, tid, block_col, t + 1, next);
@@ -72,7 +72,9 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
         #pragma unroll
         for (int k = 0; k < K_PER_BLOCK; ++k) {
             FETCH_FLOAT4(reg_a[0]) = FETCH_FLOAT4(shared_a[cur][k][thread_row]);
+            FETCH_FLOAT4(reg_a[4]) = FETCH_FLOAT4(shared_a[cur][k][thread_row + 4]);
             FETCH_FLOAT4(reg_b[0]) = FETCH_FLOAT4(shared_b[cur][k][thread_col]);
+            FETCH_FLOAT4(reg_b[4]) = FETCH_FLOAT4(shared_b[cur][k][thread_col + 4]);
             #pragma unroll
             for (int i = 0; i < M_PER_THREAD; ++i) {
                 #pragma unroll
@@ -84,7 +86,7 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
         __syncthreads();
 
         cur ^= 1;
-        next ^= 1;
+        next ^= 1;  
     }
 
     if (TILE_CNT > 0) {
@@ -92,7 +94,9 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
         #pragma unroll
         for (int k = 0; k < valid_k; ++k) {
             FETCH_FLOAT4(reg_a[0]) = FETCH_FLOAT4(shared_a[cur][k][thread_row]);
+            FETCH_FLOAT4(reg_a[4]) = FETCH_FLOAT4(shared_a[cur][k][thread_row + 4]);
             FETCH_FLOAT4(reg_b[0]) = FETCH_FLOAT4(shared_b[cur][k][thread_col]);
+            FETCH_FLOAT4(reg_b[4]) = FETCH_FLOAT4(shared_b[cur][k][thread_col + 4]);
             #pragma unroll
             for (int i = 0; i < M_PER_THREAD; ++i) {
                 #pragma unroll
@@ -101,14 +105,15 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
                 }
             }
         }
-    }
+    }  
 
     #pragma unroll
     for (int i = 0; i < M_PER_THREAD; ++i) {
         int global_row = block_row + thread_row + i;
         int global_col = block_col + thread_col;
-        if (global_row < M && global_col + 3 < N) {
+        if (global_row < M && global_col + 7 < N) {
             FETCH_FLOAT4(C(global_row, global_col)) = FETCH_FLOAT4(tmp[i][0]);
+            FETCH_FLOAT4(C(global_row, global_col + 4)) = FETCH_FLOAT4(tmp[i][4]);
         } else if (global_row < M) {
             for (int j = 0; j < N_PER_THREAD && global_col + j < N; ++j) {
                 C(global_row, global_col + j) = tmp[i][j];
@@ -118,11 +123,11 @@ __global__ void sgemm_gpu(float *a, float *b, float *c) {
 }
 
 void launch_sgemm_v5(float *a, float *b, float *c) {
-    constexpr unsigned int M_PER_BLOCK{64};
-    constexpr unsigned int N_PER_BLOCK{64};
-    constexpr unsigned int K_PER_BLOCK{16};
-    constexpr unsigned int M_PER_THREAD{4};
-    constexpr unsigned int N_PER_THREAD{4};
+    constexpr unsigned int M_PER_BLOCK{128};
+    constexpr unsigned int N_PER_BLOCK{128};
+    constexpr unsigned int K_PER_BLOCK{8};
+    constexpr unsigned int M_PER_THREAD{8};
+    constexpr unsigned int N_PER_THREAD{8};
 
     constexpr unsigned int M_THREAD_PER_BLOCK = M_PER_BLOCK / M_PER_THREAD;
     constexpr unsigned int N_THREAD_PER_BLOCK = N_PER_BLOCK / N_PER_THREAD; // 16
@@ -130,8 +135,6 @@ void launch_sgemm_v5(float *a, float *b, float *c) {
     dim3 block{N_THREAD_PER_BLOCK, M_THREAD_PER_BLOCK}; 
     dim3 grid{(N + N_PER_BLOCK - 1) / N_PER_BLOCK, (M + M_PER_BLOCK - 1) / M_PER_BLOCK};
     sgemm_gpu<M_PER_BLOCK, N_PER_BLOCK, K_PER_BLOCK, M_PER_THREAD, N_PER_THREAD><<<grid, block>>>(a, b, c);
-
-    cudaDeviceSynchronize();
 }
 
 #ifdef SGEMM_STANDALONE

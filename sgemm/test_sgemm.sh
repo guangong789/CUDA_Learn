@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SRC="./sgemm/sgemm_global.cuh"
-BIN="./build/sgemm_v4"
+BIN="./build/sgemm_v5"
 
 echo "========================================="
 echo "TEST TARGET: $BIN"

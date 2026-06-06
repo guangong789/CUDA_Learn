@@ -1,5 +1,5 @@
 ```
-在写 readme 的过程中发现自 version 3 开始，测试程序在连续高频运行时出现严重的性能分级跳变：sgemm_v3 耗时在 29ms (4700 GFLOPS) 与 51ms (2700 GFLOPS) 两个固定档位剧烈横跳。对照组 cuBLAS 亦受到波及，后期算力从 6400 GFLOPS 跌至 5000 GFLOPS。
+在写 readme 的过程中发现自 version 3 开始，测试程序在连续运行时出现了性能分级跳变：sgemm_v3 耗时在 29ms (4700 GFLOPS) 与 51ms (2700 GFLOPS) 两个固定档位横跳。对照组 cuBLAS 亦受到波及，后期算力从 6400 GFLOPS 跌至 5000 GFLOPS。
 猜测可能是因为 WSL2 环境下的硬件功耗与温度导致，所以从 version 3 及以后的性能对比，开始采用多次 benchmark 中的性能峰值进行比较。
 这可能会导致文中 benchmark 与 ncu profiling 的数据不能自洽，但是 ncu 关注的是硬件微观层面的比例与瓶颈，而 benchmark 关注宏观层面的性能极限，所以二者核心结论并不冲突。
 ```
@@ -132,6 +132,7 @@ $bankID=(row\times64+col)\bmod32=col\bmod32$, 映射的位置只与 col 即代�
 |5  |1          |1     |
 |6  |1          |1     |
 |7  |1          |1     |  
+
 产生了 4 路 bank conflict, 拉长了时钟周期  
 ## Summary  
 Shared Store Bank Conflicts: The memory access pattern for shared stores might not be optimal and causes on average a 4.0 - way bank conflict across all 41943040 shared store requests.This results in 100663296 bank conflicts, which represent 60.00% of the overall 167772160 wavefronts for shared stores.
@@ -141,6 +142,32 @@ ncu summary 的确提示代码在 shared store 时产生了 4 路冲突
 ![alt text](assets/image-43.png)  
 由于该版本 transpose 优化有得有失，实际性能提升微乎其微  
 # VERSION 5: Double Buffer  
-
+![alt text](assets/image-45.png)  
+在上一版中，单线程计算 16 次 FMA 需要 2 次 LDS.128，计算强度偏低，现在改成单线程计算 8*8 的外积，64 次 FMA 需要 4 次 LDS.128，计算强度提升为原来的 2 倍，也能够增强寄存器复用，这是 latency hiding 的一种方法，这一版代码中还通过 double buffer 的方法，使用 2 倍的 shared memory，在循环开始时就先发出 load 指令，然后在数据加载的过程中进行计算，算完之后再 `__syncthreads()`，进一步隐藏延迟，从而获得了 40.83% duration reduction 和 1.69× speedup
 ## Overview  
-![alt text](assets/image-44.png) 
+![alt text](assets/image-44.png)  
+## SOL  
+![alt text](assets/image-46.png)  
+从 ncu sol 可以看到经过优化后该版本的瓶颈已经上一版本的 memory bound 向 compute bound 转变，同时由于使用了更大的 shared memory，导致 L2 throughput 大幅下降，总体吞吐情况已经向 cublas 的形式靠近  
+## Memory Workload Analysis  
+![alt text](assets/image-47.png)  
+出现了上一版代码没有的 shared load bank conflict，可以算出 v5 的 store bank conflict 由 v4 的 4 路冲突退化为 2 路冲突  
+## Scheduler Statistics
+![alt text](assets/image-48.png)  
+![alt text](assets/image-49.png)  
+平均每个调度器中活跃的 warps 减少了一半，但是每周期就绪和发射的 warps 实现了提升，现在调度器空转的时间减小到了 $\tfrac{1}{3}$，代码执行的效率更高了
+## Occupancy  
+![alt text](assets/image-50.png)  
+![alt text](assets/image-51.png)  
+由于这个版本使用了 123 registers/thread，导致 SM 上驻留的 block 由上一版的 4 个减少到了 2 个，同样也导致 active warps per scheduler 的减半，虽然此时 occupancy 只有 33% 了，但是代码性能实现了提升，这是值得的  
+## Summary  
+L1TEX Global Store Access Pattern: The memory access pattern for global stores to L1TEX might not be optimal. On average, only 16.0 of the 32 bytes transmitted per sector are utilized by each thread.  
+
+ncu 显示全局写回的时候利用率只有 50%，可能是因为每个线程在同一次迭代中会有 2 次 STG.128，在第一次 STG.128 时，thread 0 关注的是 col{0, 1, 2, 3}，而 thread 1 关注的是 col{8, 9, 10, 11}，中间的 col{4, 5, 6, 7} 要等到 thread 0 的第二次 STG.128 才会被利用
+# END  
+![alt text](assets/image-53.png)
+![alt text](assets/image-52.png)  
+最终的 SGEMM 实现达到了 6310.79 GFLOPS，在相同的基准测试配置下，相当于 cuBLAS FP32 极限性能的 95.9%，在 roofline 图中也有并驾齐驱的趋势
+
+![alt text](assets/image-55.png)  
+在非对称不规则矩阵维度（$4097 \times 4098 \times 4099$）的附加基准测试中，该实现达到了 5941 GFLOPS 的算力吞吐，相当于 cuBLAS 相同配置下性能的 96.4%。这表明代码中的边界处理路径依然保持了高执行效率，并没有对整体吞吐量造成显著的负面影响。
