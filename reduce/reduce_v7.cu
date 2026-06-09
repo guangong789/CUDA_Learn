@@ -1,4 +1,4 @@
-#include <reduce_global.cuh>
+#include <reduce_global.cuh> 
 
 // SHUFFLE
 
