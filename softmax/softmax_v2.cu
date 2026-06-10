@@ -14,7 +14,7 @@ __global__ void softmax_v2(float* input, float* output) {
     float local_max = fmaxf(fmaxf(vals.x, vals.y), fmaxf(vals.z, vals.w));
     smem[tid] = local_max;
     __syncthreads();
-    // Block Reduce Max
+    // block reduce max
     for (int stride = blockDim.x / 2; stride >= 32; stride >>= 1) {
         if (tid < stride) {
             smem[tid] = fmaxf(smem[tid], smem[tid + stride]);
@@ -27,12 +27,12 @@ __global__ void softmax_v2(float* input, float* output) {
     }
     __syncthreads();
     const float max_val = smem[0];
-    // Exp
+    // exp
     float4 exps = {expf(vals.x - max_val), expf(vals.y - max_val), expf(vals.z - max_val), expf(vals.w - max_val)};
     float local_sum = exps.x + exps.y + exps.z + exps.w;
     smem[tid] = local_sum;
     __syncthreads();
-    // Block Reduce Sum
+    // block reduce sum
     for (int stride = blockDim.x / 2; stride >= 32; stride >>= 1) {
         if (tid < stride) {
             smem[tid] += smem[tid + stride];
@@ -45,7 +45,7 @@ __global__ void softmax_v2(float* input, float* output) {
     }
     __syncthreads();
     const float sum = smem[0];
-    // Normalize
+    // normalize
     float4 out = {exps.x / sum, exps.y / sum, exps.z / sum, exps.w / sum};
     FETCH_FLOAT4(output[idx]) = out;
 }

@@ -3,6 +3,8 @@ set(SOFTMAX_KERNELS
     softmax_v1.cu
     softmax_v2.cu
     softmax_v3.cu
+    softmax_v4.cu
+    softmax_v5.cu
 )
 
 foreach(KERNEL_FILE ${SOFTMAX_KERNELS})

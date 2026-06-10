@@ -72,6 +72,8 @@ int main() {
     benchmark("softmax_v1", launch_softmax_v1, d_input, d_output);
     benchmark("softmax_v2", launch_softmax_v2, d_input, d_output);
     benchmark("softmax_v3", launch_softmax_v3, d_input, d_output);
+    benchmark("softmax_v4", launch_softmax_v4, d_input, d_output);
+    benchmark("softmax_v5", launch_softmax_v5, d_input, d_output);
 
     cudaFree(d_input);
     cudaFree(d_output);

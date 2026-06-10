@@ -89,11 +89,6 @@ inline bool softmax_cmp(const float* gpu, const float* ref, float atol = 1e-4f, 
     return pass;
 }
 
-void launch_softmax_v0(float* input, float* output);
-void launch_softmax_v1(float* input, float* output);
-void launch_softmax_v2(float* input, float* output);
-void launch_softmax_v3(float* input, float* output);
-
 __device__ __forceinline__ float warpReduceMax(float val) {
     for (int stride = 16; stride > 0; stride >>= 1) {
         val = fmaxf(val, __shfl_down_sync(0xffffffff, val, stride));
@@ -107,3 +102,35 @@ __device__ __forceinline__ float warpReduceSum(float val) {
     }
     return val;
 }
+
+struct Pair {
+    float m;
+    float s;
+};
+
+__device__ __forceinline__ Pair merge(Pair a, Pair b) {
+    Pair out;
+    out.m = fmaxf(a.m, b.m);
+    out.s = a.s * expf(a.m - out.m) + b.s * expf(b.m - out.m);
+
+    return out;
+}
+
+__device__ __forceinline__ Pair warpReduceOnline(float m, float s){
+    for (int stride = 16; stride > 0; stride >>= 1) {
+        float m_peer = __shfl_down_sync(0xffffffff, m, stride);
+        float s_peer = __shfl_down_sync(0xffffffff, s, stride);
+
+        Pair out = merge({m,s}, {m_peer,s_peer});
+        m = out.m;
+        s = out.s;
+    }
+    return {m,s};
+}
+
+void launch_softmax_v0(float* input, float* output);
+void launch_softmax_v1(float* input, float* output);
+void launch_softmax_v2(float* input, float* output);
+void launch_softmax_v3(float* input, float* output);
+void launch_softmax_v4(float* input, float* output);
+void launch_softmax_v5(float* input, float* output);

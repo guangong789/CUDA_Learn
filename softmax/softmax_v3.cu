@@ -16,11 +16,11 @@ __global__ void softmax_v3(float* input, float* output) {
     __shared__ float smem[NUM_WARPS];
     int warp_id = tid / 32;
     int lane_id = tid % 32;
-    // Block Reduce Max
+    // warp reduce max
     float warp_max = warpReduceMax(local_max);
     if (lane_id == 0) smem[warp_id] = warp_max;
     __syncthreads();
-    
+    // block reduce max
     if (warp_id == 0) {
         float block_max = (lane_id < NUM_WARPS) ? smem[lane_id] : -FLT_MAX;
         block_max = warpReduceMax(block_max);
@@ -28,13 +28,14 @@ __global__ void softmax_v3(float* input, float* output) {
     }
     __syncthreads();
     float max_val = smem[0];
-    // Exp
+    // exp
     float4 exps = {expf(vals.x - max_val), expf(vals.y - max_val), expf(vals.z - max_val), expf(vals.w - max_val)};
     float local_sum = exps.x + exps.y + exps.z + exps.w;
-    // Block Reduce Sum
+    // warp reduce sum
     float warp_sum = warpReduceSum(local_sum);
     if (lane_id == 0) smem[warp_id] = warp_sum;
     __syncthreads();
+    // block reduce sum
     if (warp_id == 0) {
         float block_sum = (lane_id < NUM_WARPS) ? smem[lane_id] : 0.0f;
         block_sum = warpReduceSum(block_sum);
@@ -42,7 +43,7 @@ __global__ void softmax_v3(float* input, float* output) {
     }
     __syncthreads();
     float sum = smem[0];
-    // Normalize
+    // normalize
     float4 out = {exps.x / sum, exps.y / sum, exps.z / sum, exps.w / sum};
     FETCH_FLOAT4(output[idx]) = out;
 }
