@@ -30,7 +30,7 @@ __global__ void softmax_v0(float *input, float *output) {
     }
     // normalize
     float sum = shared_m[0];
-    output[index] = exp_val / sum;
+    output[index] = exp_val / sum; 
 }
 
 void launch_softmax_v0(float* input, float* output) {

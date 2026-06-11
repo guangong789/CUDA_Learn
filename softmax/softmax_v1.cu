@@ -4,7 +4,7 @@
 
 __global__ void softmax_v1(float *input, float *output) {
     int row = blockIdx.x, col = threadIdx.x;
-    int index = row * N + col;
+    int index = row * N + col; 
 
     __shared__ float shared_m[N];
     float val = input[index];

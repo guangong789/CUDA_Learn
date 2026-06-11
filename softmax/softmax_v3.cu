@@ -12,7 +12,7 @@ __global__ void softmax_v3(float* input, float* output) {
     float4 vals = FETCH_FLOAT4(input[idx]);
     float local_max = fmaxf(fmaxf(vals.x, vals.y), fmaxf(vals.z, vals.w));
 
-    const int NUM_WARPS = N / (NUM_PER_THREAD * 32);
+    const int NUM_WARPS = N / (NUM_PER_THREAD * 32);  // 8
     __shared__ float smem[NUM_WARPS];
     int warp_id = tid / 32;
     int lane_id = tid % 32;

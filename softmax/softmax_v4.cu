@@ -12,8 +12,10 @@ __global__ void softmax_v4(float* input, float* output) {
     // thread reduce max
     float thread_max = -FLT_MAX;
     #pragma unroll
-    for (int col = lane_id; col < N; col += 32) {
-        thread_max = fmaxf(thread_max, input[row * N + col]);
+    for (int col = lane_id * 4; col < N; col += 32 * 4) {
+        float4 f4 = FETCH_FLOAT4(input[row * N + col]);
+        float f4_max = fmaxf(fmaxf(f4.x, f4.y), fmaxf(f4.z, f4.w));
+        thread_max = fmaxf(thread_max, f4_max);
     }
     // warp reduce max
     float max_val = warpReduceMax(thread_max);
@@ -21,17 +23,19 @@ __global__ void softmax_v4(float* input, float* output) {
     // exp & reduce sum
     float thread_sum = 0.f;
     #pragma unroll
-    for (int col = lane_id; col < N; col += 32) {
-        float exp = expf(input[row * N + col] - max_val);
+    for (int col = lane_id * 4; col < N; col += 32 * 4) {
+        float4 f4 = FETCH_FLOAT4(input[row * N + col]);
+        float exp = expf(f4.x - max_val) + expf(f4.y - max_val) + expf(f4.z - max_val) + expf(f4.w - max_val);
         thread_sum += exp;
     }
     float sum_val = warpReduceSum(thread_sum);
     sum_val = __shfl_sync(0xffffffff, sum_val, 0);
     // normalize
     #pragma unroll
-    for (int col = lane_id; col < N; col += 32) {
-        float exp = expf(input[row * N + col] - max_val);
-        output[row * N + col] = exp / sum_val;
+    for (int col = lane_id * 4; col < N; col += 32 * 4) {
+        float4 f4 = FETCH_FLOAT4(input[row * N + col]);
+        float4 exp4 = {expf(f4.x - max_val), expf(f4.y - max_val), expf(f4.z - max_val), expf(f4.w - max_val)};
+        FETCH_FLOAT4(output[row * N + col]) = {exp4.x / sum_val, exp4.y / sum_val, exp4.z / sum_val, exp4.w / sum_val};
     }
 }
 
