@@ -6,4 +6,4 @@ Read me in [READ_REDUCE](https://github.com/guangong789/CUDA_Learn/blob/main/red
 Read me in [READ_SGEMM](https://github.com/guangong789/CUDA_Learn/blob/main/sgemm/READ_SGEMM.md)  
 ## Softmax  
 ![alt text](assets/image-2.png)  
-Read me in [READ_SOFTMAX](https://github.com/guangong789/CUDA_Learn/blob/main/sgemm/READ_SGEMM.md)  
+Read me in [READ_SOFTMAX](https://github.com/guangong789/CUDA_Learn/blob/main/softmax/READ_SOFTMAX.md)  
