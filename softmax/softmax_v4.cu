@@ -33,9 +33,10 @@ __global__ void softmax_v4(float* input, float* output) {
     // normalize
     #pragma unroll
     for (int col = lane_id * 4; col < N; col += 32 * 4) {
+        float inv_sum = 1.f / sum_val;
         float4 f4 = FETCH_FLOAT4(input[row * N + col]);
         float4 exp4 = {expf(f4.x - max_val), expf(f4.y - max_val), expf(f4.z - max_val), expf(f4.w - max_val)};
-        FETCH_FLOAT4(output[row * N + col]) = {exp4.x / sum_val, exp4.y / sum_val, exp4.z / sum_val, exp4.w / sum_val};
+        FETCH_FLOAT4(output[row * N + col]) = {exp4.x * inv_sum, exp4.y * inv_sum, exp4.z * inv_sum, exp4.w * inv_sum};
     }
 }
 

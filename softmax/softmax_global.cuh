@@ -125,7 +125,7 @@ __device__ __forceinline__ Pair warpReduceOnline(float m, float s){
         m = out.m;
         s = out.s;
     }
-    return {m,s};
+    return {m, s};
 }
 
 void launch_softmax_v0(float* input, float* output);
