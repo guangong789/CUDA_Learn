@@ -7,12 +7,7 @@ import torch.nn.functional as F
 from cuda_operator import flash_attention
 
 
-def attention_reference(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    causal: bool,
-) -> torch.Tensor:
+def attention_reference(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, causal: bool,) -> torch.Tensor:
     scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(q.size(-1))
     if causal:
         seq_len = q.size(-2)
