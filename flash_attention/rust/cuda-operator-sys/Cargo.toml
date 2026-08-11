@@ -1,0 +1,8 @@
+[package]
+name = "cuda-operator-sys"
+version = "0.1.0"
+edition = "2024"
+links = "cuda_operator_flash_attention"
+
+[lib]
+path = "src/lib.rs"

@@ -1,0 +1,3 @@
+[workspace]
+members = ["cuda-operator-sys", "cuda-operator"]
+resolver = "3"
