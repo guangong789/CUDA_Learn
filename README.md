@@ -1,19 +1,27 @@
 # CUDA Operator
 
-这是一个用于学习 CUDA 算子开发与性能优化的项目，包含 Reduce、SGEMM、Softmax 和 Flash Attention 的多种实现。项目记录了从基础版本到分块、向量化、warp-level primitive、shared memory 等优化方法的实践过程，并通过 CPU、cuBLAS 或 PyTorch 实现进行正确性验证。
+本项目使用 CUDA C++ 实现 Reduce、SGEMM、Softmax 和 Flash Attention 算子，并记录各版本的并行划分、访存方式和性能变化。算子通过 CPU、CUB、cuBLAS 或 PyTorch reference 进行正确性验证，使用 CUDA Event 进行性能测试，并使用 Nsight Compute 分析内存吞吐、warp stall、occupancy 和指令调度。
 
-本项目以理解算子实现、性能分析和工程接入为主要目的，不作为生产级算子库使用。
+项目同时提供 PyTorch C++/CUDA Extension、C ABI 和 Rust 接口，用于验证 CUDA kernel 在独立程序及上层语言中的调用方式。
+
+## 技术范围
+
+- 开发语言：C++23、CUDA C++20、Python、Rust
+- 构建工具：CMake、PyTorch C++ Extension、Cargo
+- 优化方法：线程与数据分块、合并访存、`float4` 向量化、shared memory、register tiling、warp shuffle、double buffering 和 online softmax
+- 性能分析：CUDA Event、Nsight Compute、Roofline、memory workload、scheduler 和 occupancy
+- 对照实现：CPU、CUB、cuBLAS、PyTorch 显式 Attention 和 PyTorch SDPA
 
 ## 构建
 
-当前工程使用 C++23、CUDA C++20，并将目标 GPU 架构设为 `sm_86`。在其他架构上构建时，需要修改根目录 `CMakeLists.txt` 中的 `CMAKE_CUDA_ARCHITECTURES`。
+工程默认将目标 GPU 架构设为 `sm_86`。在其他架构上构建时，需要修改根目录 `CMakeLists.txt` 中的 `CMAKE_CUDA_ARCHITECTURES`。
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-构建完成后，可执行文件位于 `build/`，其中包括各版本的独立测试程序以及以下 benchmark：
+构建产物位于 `build/`。以下程序用于运行主要 benchmark：
 
 ```bash
 ./build/bm_sgemm
@@ -24,27 +32,36 @@ cmake --build build --parallel
 ## Reduce
 
 ![alt text](assets/image.png)  
-Read me in [READ_REDUCE](https://github.com/guangong789/CUDA_Learn/blob/main/reduce/READ_REDUCE.md)  
 
-## Sgemm
+包含 v0-v7 和 CUB reference，依次分析非合并访存、线程束分化、shared-memory bank conflict、`float4` 向量化、循环展开和 warp shuffle。测试规模为 `N = 67,108,864`；向量化版本记录的显存吞吐为 320 GB/s。
+
+实现与分析见 [READ_REDUCE](reduce/READ_REDUCE.md)。
+
+## SGEMM
 
 ![alt text](assets/image-1.png)  
-Read me in [READ_SGEMM](https://github.com/guangong789/CUDA_Learn/blob/main/sgemm/READ_SGEMM.md)  
 
-## Softmax  
+包含 v0-v5 和 cuBLAS reference，覆盖 shared-memory tiling、单线程多数据映射、register tiling、向量化访存、矩阵转置实验和 double buffering。`4096 x 4096 x 4096` 测试中，v5 记录为 6310.79 GFLOPS，对应同配置 cuBLAS FP32 性能的 95.9%。
+
+实现与分析见 [READ_SGEMM](sgemm/READ_SGEMM.md)。
+
+## Softmax
 
 ![alt text](assets/image-2.png)  
-Read me in [READ_SOFTMAX](https://github.com/guangong789/CUDA_Learn/blob/main/softmax/READ_SOFTMAX.md)
+
+包含 v0-v5，覆盖 shared-memory reduction、warp shuffle、`float4` 向量化、warp-level reduction、warp-per-row 和 online softmax。`M = 4096, N = 1024` 测试中，v2 与 v3 记录为 0.1099 ms，对应约 305 GB/s 的有效带宽。
+
+实现与分析见 [READ_SOFTMAX](softmax/READ_SOFTMAX.md)。
 
 ## Flash Attention
 
-项目实现了一个 FP32 Flash Attention forward kernel。该实现使用 tiled Q/K/V 计算和 online softmax，不生成完整的 attention score 矩阵，支持 causal、non-causal 和不规则 sequence length。
+项目实现 FP32 Flash Attention forward kernel，输入布局为 `[batch, head, sequence, head_dim]`。Kernel 使用 tiled Q/K/V 和 online softmax，不生成完整的 attention score 矩阵，支持 causal、non-causal 和不规则 sequence length。
 
-当前实现固定支持 `head_dim = 64`，read me in [READ_FLASH_ATTENTION](flash_attention/READ_FLASH_ATTENTION.md)。
+当前实现固定支持 `head_dim = 64`。算法、内存布局和状态合并方式见 [READ_FLASH_ATTENTION](flash_attention/READ_FLASH_ATTENTION.md)。
 
 ## PyTorch C++/CUDA Extension
 
-`flash_attention/pytorch/` 将 Flash Attention kernel 注册为 PyTorch 自定义算子，可以从 Python 直接调用：
+`flash_attention/pytorch/` 将 Flash Attention kernel 注册为 PyTorch 自定义算子。接口接收三个连续的 FP32 CUDA Tensor，并使用 PyTorch 当前 CUDA stream：
 
 ```python
 import torch
@@ -57,21 +74,44 @@ v = torch.randn_like(q)
 output = flash_attention(q, k, v, causal=True)
 ```
 
-扩展提供正确性测试和与 PyTorch SDPA 的 benchmark。Read me in [PyTorch Extension README](flash_attention/pytorch/README.md)。
+扩展包含正确性测试以及与 PyTorch SDPA 的 benchmark，构建与使用方式见 [PyTorch Extension README](flash_attention/pytorch/README.md)。
+
+## Rust Interface
+
+`flash_attention/rust/` 通过 C ABI 调用同一个 Flash Attention kernel。Rust 层提供 `Tensor`、`CudaStream`、参数检查、CUDA 错误处理和显存生命周期管理：
+
+```rust
+use cuda_operator::{Tensor, flash_attention};
+
+let q = Tensor::from_slice(&q_host, [1, 8, 257, 64])?;
+let k = Tensor::from_slice(&k_host, [1, 8, 257, 64])?;
+let v = Tensor::from_slice(&v_host, [1, 8, 257, 64])?;
+let output = flash_attention(&q, &k, &v, true)?;
+```
+
+构建、测试和非默认 CUDA stream 接口见 [Rust Interface README](flash_attention/rust/README.md)。
 
 ## 验证
 
-当前版本已完成以下验证：
+- 所有 CMake target 均通过 Release 构建。
+- PyTorch Extension 的 9 项测试通过。
+- Rust 接口的 4 项测试通过。
+- Flash Attention 测试覆盖 causal、non-causal、规则与不规则 sequence length、非默认 CUDA stream 和非法输入。
+- Flash Attention 分别与 CPU reference、PyTorch 显式实现和 PyTorch SDPA 进行结果对比。
 
-- 所有 CMake target 均可完成 Release 构建。
-- PyTorch Extension 的 9 项测试全部通过。
-- 测试覆盖规则与不规则 sequence length、causal 与 non-causal attention、非默认 CUDA stream 和非法输入检查。
-- Flash Attention 的结果分别与显式 PyTorch 实现和 PyTorch SDPA 对比。
+验证环境：
 
-验证环境为 Python 3.10、PyTorch `2.6.0+cu124`、CUDA Toolkit 12.4 和 RTX 3060 Laptop GPU（`sm_86`）。不同硬件和软件版本下的结果可能存在差异。
+- Ubuntu on WSL2
+- Python 3.10
+- PyTorch `2.6.0+cu124`
+- CUDA Toolkit 12.4
+- RTX 3060 Laptop GPU（`sm_86`）
+
+性能数据对应上述硬件、软件版本及各算子文档中记录的输入规模。
 
 ## 当前限制
 
 - Flash Attention 仅实现 FP32 forward，固定 `head_dim = 64`。
-- PyTorch Extension 暂不支持 autograd、dropout、FP16/BF16 和打包的变长序列。
-- 各算子的实现主要用于学习和实验，接口与性能未按生产环境要求设计。
+- PyTorch Extension 不支持 autograd、dropout、FP16/BF16 和打包的变长序列。
+- Reduce、SGEMM 和 Softmax 的部分版本使用编译期固定的输入规模。
+- 当前接口未包含跨 GPU 通信和分布式执行。
